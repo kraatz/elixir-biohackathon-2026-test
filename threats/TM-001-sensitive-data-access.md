@@ -15,9 +15,6 @@ stride:
   - information-disclosure
   - tampering
 severity: high
-likelihood: medium
-status: mitigations-planned
-owner: unassigned
 related: []
 references:
   - "OWASP LLM06: Sensitive Information Disclosure"
@@ -78,8 +75,3 @@ credentials, and internal documents.
 - Revoke agent credentials upon detection of unauthorized access.
 - Alert the security team and quarantine the affected session.
 
-## Residual Risk
-
-Even with least-privilege access, the agent may still legitimately handle
-some sensitive data required by the pipeline; monitoring and output filtering
-reduce but do not eliminate exposure risk.
