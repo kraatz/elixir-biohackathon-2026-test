@@ -8,9 +8,6 @@ assets:
   - user-records
   - credentials
   - internal-documents
-properties:
-  - confidentiality
-  - integrity
 stride:
   - information-disclosure
   - tampering
@@ -37,16 +34,15 @@ credentials, and internal documents.
 
 ## Security Properties Violated
 
-- **Confidentiality** (STRIDE: Information Disclosure) — reading and exposing
-  sensitive data in the chat output.
-- **Integrity** (STRIDE: Tampering) — modifying or deleting the data during
+- **Information Disclosure**: reading and exposing sensitive data in the chat output.
+- **Tampering**: modifying or deleting the data during
   pipeline execution.
 
 ## Attack Scenarios
 
-1. **Malicious user prompt** — a user directly prompts the agent to access
+1. **Malicious user prompt**: a user directly prompts the agent to access
    sensitive data and return it in the chat.
-2. **Indirect prompt injection** — instructions embedded in documents or tool
+2. **Indirect prompt injection**: instructions embedded in documents or tool
    outputs processed during the pipeline cause the agent to access or leak
    the data without the user asking directly.
 
