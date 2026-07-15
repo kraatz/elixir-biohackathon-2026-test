@@ -14,7 +14,9 @@ stride:
 agent-capabilities:
   - data-access
   - chat-output
-related: []
+related:
+  - TM-003
+  - TM-006
 references:
   - "OWASP LLM06: Sensitive Information Disclosure"
   - "OWASP LLM08: Excessive Agency"

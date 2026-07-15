@@ -37,3 +37,4 @@ agent-capabilities:
   persistent-memory: Retains state across sessions
   multi-agent: Interacts with or orchestrates other agents
   autonomous-execution: Acts without per-step human approval
+  context-ingestion: Incorporates external content (uploads, pasted text, fetched pages, tool output) into its working context
