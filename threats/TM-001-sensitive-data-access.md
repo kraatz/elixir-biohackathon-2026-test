@@ -11,7 +11,9 @@ assets:
 stride:
   - information-disclosure
   - tampering
-severity: high
+agent-capabilities:
+  - data-access
+  - chat-output
 related: []
 references:
   - "OWASP LLM06: Sensitive Information Disclosure"
@@ -32,11 +34,11 @@ process becomes the vehicle for unauthorized data access.
 Sensitive/private data accessible to the agent, e.g. user records,
 credentials, and internal documents.
 
-## Security Properties Violated
+## Threat Categories (STRIDE)
 
-- **Information Disclosure**: reading and exposing sensitive data in the chat output.
-- **Tampering**: modifying or deleting the data during
-  pipeline execution.
+- **Information Disclosure**: reading and exposing sensitive data in the
+  chat output.
+- **Tampering**: modifying or deleting the data during pipeline execution.
 
 ## Attack Scenarios
 
@@ -50,7 +52,7 @@ credentials, and internal documents.
 
 - The agent has read (and/or write/delete) access to the sensitive data store.
 - No output filtering or data-loss-prevention layer exists between the agent
-  and the chat response.
+  and the output channel.
 - User input is passed to the agent without restriction on data-access
   requests.
 
@@ -58,16 +60,16 @@ credentials, and internal documents.
 
 ### Preventive
 
-- Do not grant the agent access to sensitive data (least privilege).
-- Scope credentials to only what the pipeline requires.
+- Least privilege: do not grant the agent access to sensitive data it does
+  not need.
+- Credential scoping: limit credentials to only what the pipeline requires.
 
 ### Detective
 
-- Monitor user prompts and agent outputs using governance/DLP tools.
-- Log all data-access operations performed by the agent.
+- Monitoring of user prompts and agent outputs (governance / DLP tooling).
+- Logging of all data-access operations performed by the agent.
 
 ### Responsive
 
-- Revoke agent credentials upon detection of unauthorized access.
-- Alert the security team and quarantine the affected session.
-
+- Credential revocation on detection of unauthorized access.
+- Session quarantine and incident escalation.

@@ -1,0 +1,39 @@
+# Controlled vocabularies for threat model entries.
+# This file is the source of truth; VOCABULARY.md explains conventions
+# and may render these tables for humans.
+#
+# Extending: add a new key with a one-line description. Check for existing
+# synonyms first (e.g. don't add `user-data` next to `user-records`).
+# `stride` is a fixed external standard - do NOT extend it.
+
+assets:
+  user-records: Personal or account data of end users
+  credentials: "Secrets: passwords, API keys, tokens, certificates"
+  internal-documents: Non-public organizational content (docs, wikis, tickets)
+  source-code: Application or infrastructure code
+  model-weights: Trained model parameters
+  system-prompt: Agent instructions / configuration prompts
+  conversation-history: Prior messages, agent memory of past sessions
+  compute-resources: CPU/GPU time, API quota, budget
+  external-systems: Third-party systems the agent can reach (APIs, websites)
+  agent-integrity: Correctness of the agent's own behavior/outputs
+
+stride:
+  spoofing: Authenticity
+  tampering: Integrity
+  repudiation: Non-repudiability (missing/destroyed evidence)
+  information-disclosure: Confidentiality
+  denial-of-service: Availability
+  elevation-of-privilege: Authorization
+
+agent-capabilities:
+  data-access: Reads (or writes/deletes) data stores or documents
+  chat-output: Returns free-form output to a user-visible channel
+  tool-use: Invokes external tools / function calls
+  code-execution: Runs generated code (sandboxed or not)
+  web-access: Fetches or browses external web content
+  email-messaging: Sends messages on a user's behalf (email, chat, etc.)
+  file-system-access: Reads/writes a local or mounted file system
+  persistent-memory: Retains state across sessions
+  multi-agent: Interacts with or orchestrates other agents
+  autonomous-execution: Acts without per-step human approval
