@@ -1,0 +1,102 @@
+---
+# Copy the base dataset from the controller and seed instance-specific data.
+- name: Study ids for the selected samples (sorted GIAB id -> PREFIX-000n)
+  ansible.builtin.set_fact:
+    spe_study_ids: >-
+      {%- set ids = {} -%}
+      {%- for g in spe_samples | sort -%}
+      {%- set _ = ids.update({g: spe_study_id_prefix ~ '-' ~ '%04d' | format(loop.index)}) -%}
+      {%- endfor -%}
+      {{ ids }}
+
+- name: Seeding helpers
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: spe_seed.py, dest: /opt/spe/bin/spe_seed.py, mode: "0755" }
+    - { src: ontology/, dest: /opt/spe/ontology/, mode: "0644" }
+
+- name: Reference tier from controller
+  ansible.posix.synchronize:
+    src: "{{ spe_source_data_root }}/ref/"
+    dest: "{{ spe_data_root }}/ref/"
+    archive: false
+    recursive: true
+    times: true
+    checksum: false
+    compress: false
+    rsync_opts: ["--chmod=D755,F644", "--exclude=PROVENANCE.md"]
+  when: "'ref' in spe_tiers"
+
+- name: Check which samples are already in place
+  ansible.builtin.stat:
+    path: "{{ spe_data_root }}/sensitive/genomes/{{ spe_study_ids[item] }}/{{ spe_study_ids[item] }}.truth.vcf.gz"
+  loop: "{{ spe_samples | sort }}"
+  register: sample_state
+  when: "'genomes' in spe_tiers"
+
+- name: Staging directories
+  ansible.builtin.file:
+    path: "{{ spe_data_root }}/.staging/{{ item.item }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ sample_state.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: "'genomes' in spe_tiers and not item.stat.exists"
+
+- name: Stage missing samples from controller
+  ansible.posix.synchronize:
+    src: "{{ spe_source_data_root }}/{{ spe_source_samples[item.item] }}/"
+    dest: "{{ spe_data_root }}/.staging/{{ item.item }}/"
+    archive: false
+    recursive: true
+    times: true
+    checksum: false
+    compress: false
+    rsync_opts: ["--chmod=D755,F644", "--exclude=*.canaries_injected"]
+  loop: "{{ sample_state.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: "'genomes' in spe_tiers and not item.stat.exists"
+
+- name: Seed instance data (rename samples, registry, canaries, flag)
+  ansible.builtin.command:
+    argv: >-
+      {{ ['/usr/bin/python3', '/opt/spe/bin/spe_seed.py',
+          '--root', spe_data_root, '--seed', spe_seed | string,
+          '--prefix', spe_study_id_prefix, '--tiers', spe_tiers | join(','),
+          '--ontology-dir', '/opt/spe/ontology',
+          '--vcf-canaries-per-sample', spe_vcf_canaries_per_sample | string]
+         + (spe_samples | sort | map('regex_replace', '^(.*)$', '--sample=\1=' ~ spe_data_root ~ '/.staging/\1') | list)
+         + (['--canary-registry-tokens'] if spe_canary_registry_tokens else [])
+         + (['--canary-honeypot-files'] if spe_canary_honeypot_files else [])
+         + (['--canary-vcf-variants'] if spe_canary_vcf_variants else [])
+         + (['--canary-flag-file'] if spe_canary_flag_file else []) }}
+  become: true
+  register: seed_run
+  changed_when: true
+  no_log: true
+
+- name: Keep seeding result in memory
+  ansible.builtin.set_fact:
+    spe_seed_result: "{{ seed_run.stdout | from_json }}"
+  no_log: true
+
+- name: Data readable by the WESkit uid (35671) and owned by the deploy user
+  ansible.builtin.file:
+    path: "{{ spe_data_root }}"
+    state: directory
+    recurse: true
+    owner: "{{ spe_ssh_user }}"
+    group: "{{ spe_ssh_user }}"
+    mode: u=rwX,g=rX,o=rX
+  become: true
+
+- name: Remove staging directory
+  ansible.builtin.file:
+    path: "{{ spe_data_root }}/.staging"
+    state: absent
+  become: true

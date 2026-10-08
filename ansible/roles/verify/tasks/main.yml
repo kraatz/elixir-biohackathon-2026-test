@@ -1,0 +1,42 @@
+---
+- name: APIs answer
+  ansible.builtin.uri:
+    url: "https://{{ spe_api_host }}{{ item }}"
+    ca_path: "{{ spe_stack_dir }}/deployment/certs/traefik.crt"
+    status_code: 200
+  loop:
+    - /ga4gh/wes/v1/service-info
+    - /ga4gh/trs/v2/tools
+    - /ga4gh/drs/v1/objects
+
+- name: Load hand-off files from the controller
+  ansible.builtin.set_fact:
+    verify_inventory: "{{ lookup('file', spe_output_dir ~ '/drs-inventory.json') | from_json }}"
+    verify_workflows: "{{ lookup('file', spe_output_dir ~ '/trs-installed.json') | from_json }}"
+
+- name: Smoke test helper
+  ansible.builtin.copy:
+    src: smoke_test.py
+    dest: /opt/spe/bin/smoke_test.py
+    mode: "0755"
+
+- name: Smoke run through WES with a DRS input
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - /opt/spe/bin/smoke_test.py
+      - --api
+      - "https://{{ spe_api_host }}/ga4gh/wes/v1"
+      - --workflow-url
+      - "{{ (verify_workflows | selectattr('id', 'equalto', 'wes-drs-smoke') | first).workflow_url }}"
+      - --drs-uri
+      - "{{ (verify_inventory | selectattr('path', 'equalto', 'PROVENANCE.md') | first).drs_uri }}"
+  register: smoke
+  changed_when: false
+  when:
+    - spe_run_smoke_test
+    - verify_workflows | selectattr('id', 'equalto', 'wes-drs-smoke') | list | length > 0
+
+- name: Smoke result
+  ansible.builtin.debug:
+    msg: "{{ smoke.stdout | default('smoke test skipped') }}"

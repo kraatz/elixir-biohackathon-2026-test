@@ -1,0 +1,117 @@
+# Managed by Ansible (spe-ansible).
+server:
+  host: 0.0.0.0
+  port: 8080
+  debug: false
+  environment: development
+  testing: false
+  use_reloader: false
+db:
+  host: trs-mongodb
+  port: 27017
+  dbs:
+    trsStore:
+      collections:
+        tools:
+          indexes:
+          - keys:
+              id: 1
+            options:
+              unique: true
+        service_info:
+          indexes:
+          - keys:
+              id: 1
+            options:
+              unique: true
+        toolclasses:
+          indexes:
+          - keys:
+              id: 1
+            options:
+              unique: true
+api:
+  specs:
+  - path:
+    - api/20200131.11d2c12.service-info.yaml
+    - api/20230406.1dd4bf8.openapi.yaml
+    - api/additions.openapi.yaml
+    append: null
+    add_operation_fields:
+      x-openapi-router-controller: ga4gh.trs.server
+    connexion:
+      strict_validation: true
+      validate_responses: true
+      options:
+        swagger_ui: true
+        serve_spec: true
+log:
+  version: 1
+  disable_existing_loggers: false
+  formatters:
+    standard:
+      class: logging.Formatter
+      style: '{'
+      format: '[{asctime}: {levelname:<8}] {message} [{name}]'
+  handlers:
+    console:
+      class: logging.StreamHandler
+      level: 20
+      formatter: standard
+      stream: ext://sys.stderr
+  root:
+    level: 10
+    handlers:
+    - console
+exceptions:
+  required_members:
+  - - message
+  - - code
+  status_member:
+  - code
+  exceptions: trs_filer.errors.exceptions.exceptions
+custom:
+  service:
+    url_prefix: https
+    external_host: {{ spe_api_host }}
+    external_port: 443
+    api_path: ga4gh/trs/v2
+  service_info:
+    id: TEMPID1
+    name: {{ spe_service_name }} TRS
+    type:
+      group: TEMP_GROUP
+      artifact: TEMP_ARTIFACT
+      version: v1
+    description: "{{ spe_service_name }} TRS service{{ ' (deployment ref ' ~ spe_svc_token_trs ~ ')' if spe_canary_service_info else '' }}"
+    organization:
+      name: {{ spe_service_org }}
+      url: parent/abc
+    contactUrl: contact/abc
+    documentationUrl: docs/abc
+    createdAt: '2020-01-01'
+    updatedAt: '2020-01-01'
+    environment: ENV
+    version: 0.0.0
+  tool:
+    id:
+      charset: string.ascii_uppercase + string.digits
+      length: 6
+    meta_version:
+      init: 1
+      increment: 1
+  version:
+    id:
+      charset: string.ascii_lowercase + string.digits
+      length: 6
+    meta_version:
+      init: 1
+      increment: 1
+  toolclass:
+    id:
+      charset: string.ascii_lowercase + string.digits
+      length: 6
+    meta_version:
+      init: 1
+      increment: 1
+    validation: false

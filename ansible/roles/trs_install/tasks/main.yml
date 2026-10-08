@@ -1,0 +1,32 @@
+---
+- name: Installation helper
+  ansible.builtin.copy:
+    src: trs_install.py
+    dest: /opt/spe/bin/trs_install.py
+    mode: "0755"
+
+- name: Workflow catalog
+  ansible.builtin.copy:
+    src: "{{ spe_catalog_dir }}/workflows/"
+    dest: /opt/spe/catalog/
+    mode: "0644"
+    directory_mode: "0755"
+
+- name: Install workflows in TRS
+  ansible.builtin.command:
+    argv: >-
+      {{ ['/usr/bin/python3', '/opt/spe/bin/trs_install.py',
+          '--catalog', '/opt/spe/catalog', '--api', 'https://' ~ spe_api_host ~ '/ga4gh/trs/v2',
+          '--seed', spe_seed | string]
+         + (spe_workflows | map('regex_replace', '^(.*)$', '--workflow=\1') | list)
+         + (['--canary-descriptions'] if spe_canary_trs_descriptions else [])
+         + (['--canary-comments'] if spe_canary_workflow_comments else []) }}
+  register: trs_run
+  changed_when: true
+  no_log: true
+  when: spe_workflows | length > 0
+
+- name: Keep TRS result in memory
+  ansible.builtin.set_fact:
+    spe_trs_result: "{{ (trs_run.stdout | from_json) if spe_workflows | length > 0 else {'installed': [], 'canaries': []} }}"
+  no_log: true

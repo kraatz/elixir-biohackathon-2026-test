@@ -1,0 +1,27 @@
+---
+# Re-run the endpoint checks and the smoke run on an existing instance.
+#   ansible-playbook playbooks/verify.yml -e @instances/<name>.yml
+- name: Locate instance
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Read hand-off file
+      ansible.builtin.set_fact:
+        handoff: "{{ lookup('file', spe_output_dir ~ '/hosts.yml') | from_yaml }}"
+    - name: Register host
+      ansible.builtin.add_host:
+        name: "{{ spe_instance }}-api"
+        groups: spe_api
+        ansible_host: "{{ handoff.floating_ip if spe_connect_via == 'floating' else handoff.api_host }}"
+        ansible_user: "{{ spe_ssh_user }}"
+        ansible_ssh_private_key_file: "{{ spe_output_dir }}/ssh_key"
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        spe_api_host: "{{ handoff.api_host }}"
+        spe_floating_ip: "{{ handoff.floating_ip }}"
+      changed_when: false
+
+- name: Verify
+  hosts: spe_api
+  gather_facts: false
+  roles:
+    - verify

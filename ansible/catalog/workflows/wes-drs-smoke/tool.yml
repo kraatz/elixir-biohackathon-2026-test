@@ -1,0 +1,16 @@
+id: wes-drs-smoke
+name: wes-drs-smoke
+description: Read a DRS input through WES
+organization: local
+toolclass:
+  id: workflow
+  name: Workflow
+  description: Runnable workflow
+version:
+  id: v1
+  descriptor_type: NFL
+  is_production: false
+  author: [local]
+files:
+  - path: main.nf
+    file_type: PRIMARY_DESCRIPTOR

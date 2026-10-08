@@ -1,0 +1,111 @@
+---
+# Runs on the controller: keypair, security group, server, floating IP.
+- name: Output directory
+  ansible.builtin.file:
+    path: "{{ spe_output_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Instance keypair
+  openstack.cloud.keypair:
+    cloud: "{{ spe_cloud }}"
+    name: "{{ spe_instance }}-key"
+    state: present
+  register: keypair
+
+- name: Save generated private key (only returned on creation)
+  ansible.builtin.copy:
+    content: "{{ keypair.keypair.private_key }}\n"
+    dest: "{{ spe_output_dir }}/ssh_key"
+    mode: "0600"
+  when: (keypair.keypair.private_key | default('', true)) | length > 0
+  no_log: true
+
+- name: Private key must be present
+  ansible.builtin.stat:
+    path: "{{ spe_output_dir }}/ssh_key"
+  register: key_file
+
+- name: Stop if the keypair exists in OpenStack but the private key is gone
+  ansible.builtin.fail:
+    msg: >-
+      {{ spe_output_dir }}/ssh_key is missing but keypair {{ spe_instance }}-key exists.
+      Delete the keypair (openstack keypair delete {{ spe_instance }}-key) and re-run.
+  when: not key_file.stat.exists
+
+- name: Security group
+  openstack.cloud.security_group:
+    cloud: "{{ spe_cloud }}"
+    name: "{{ spe_instance }}-sg"
+    description: "SPE instance {{ spe_instance }}"
+    state: present
+
+- name: Security group rules
+  openstack.cloud.security_group_rule:
+    cloud: "{{ spe_cloud }}"
+    security_group: "{{ spe_instance }}-sg"
+    protocol: "{{ item.proto }}"
+    port_range_min: "{{ item.port | default(omit) }}"
+    port_range_max: "{{ item.port | default(omit) }}"
+    remote_ip_prefix: "{{ item.cidr }}"
+    direction: ingress
+    state: present
+  loop: >-
+    {{ (spe_ssh_cidrs | map('community.general.dict_kv', 'cidr') | map('combine', {'proto': 'tcp', 'port': 22}) | list)
+     + (spe_api_cidrs | map('community.general.dict_kv', 'cidr') | map('combine', {'proto': 'tcp', 'port': 443}) | list)
+     + [{'proto': 'icmp', 'cidr': '0.0.0.0/0'}] }}
+  loop_control:
+    label: "{{ item.proto }} {{ item.port | default('') }} from {{ item.cidr }}"
+
+- name: API server
+  openstack.cloud.server:
+    cloud: "{{ spe_cloud }}"
+    name: "{{ spe_instance }}-api"
+    image: "{{ spe_image }}"
+    flavor: "{{ spe_flavor }}"
+    key_name: "{{ spe_instance }}-key"
+    network: "{{ spe_network }}"
+    security_groups: ["{{ spe_instance }}-sg"]
+    boot_from_volume: true
+    volume_size: "{{ spe_boot_volume_gb }}"
+    terminate_volume: true
+    floating_ip_pools: ["{{ spe_floating_network }}"]
+    userdata: |
+      #cloud-config
+      hostname: {{ spe_instance }}-api
+      package_update: false
+      {% if spe_extra_authorized_keys %}
+      ssh_authorized_keys:
+      {% for k in spe_extra_authorized_keys %}
+        - "{{ k }}"
+      {% endfor %}
+      {% endif %}
+    metadata:
+      spe_instance: "{{ spe_instance }}"
+      spe_role: api
+    wait: true
+    timeout: 900
+    state: present
+  register: server
+
+- name: Addresses
+  ansible.builtin.set_fact:
+    spe_api_private_ip: "{{ server.server.addresses[spe_network] | selectattr('OS-EXT-IPS:type', 'equalto', 'fixed') | map(attribute='addr') | first }}"
+    spe_api_floating_ip: "{{ server.server.addresses[spe_network] | selectattr('OS-EXT-IPS:type', 'equalto', 'floating') | map(attribute='addr') | first | default('') }}"
+
+- name: Register instance host
+  ansible.builtin.add_host:
+    name: "{{ spe_instance }}-api"
+    groups: spe_api
+    ansible_host: "{{ spe_api_floating_ip if spe_connect_via == 'floating' else spe_api_private_ip }}"
+    ansible_user: "{{ spe_ssh_user }}"
+    ansible_ssh_private_key_file: "{{ spe_output_dir }}/ssh_key"
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    ansible_python_interpreter: /usr/bin/python3
+    spe_api_host: "{{ spe_api_private_ip }}"
+    spe_floating_ip: "{{ spe_api_floating_ip }}"
+  changed_when: false
+
+- name: Show addresses
+  ansible.builtin.debug:
+    msg: "{{ spe_instance }}-api private {{ spe_api_private_ip }} floating {{ spe_api_floating_ip | default('none') }}"

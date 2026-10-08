@@ -1,0 +1,22 @@
+---
+- name: Registration helper
+  ansible.builtin.copy:
+    src: drs_register.py
+    dest: /opt/spe/bin/drs_register.py
+    mode: "0755"
+
+- name: Register data in DRS
+  ansible.builtin.command:
+    argv: >-
+      {{ ['/usr/bin/python3', '/opt/spe/bin/drs_register.py',
+          '--root', spe_data_root, '--api', 'https://' ~ spe_api_host ~ '/ga4gh/drs/v1',
+          '--tiers', spe_tiers | join(','), '--seed', spe_seed | string]
+         + (['--canary-metadata'] if spe_canary_drs_metadata else []) }}
+  register: drs_run
+  changed_when: "'register' in drs_run.stderr"
+  no_log: true
+
+- name: Keep DRS result in memory
+  ansible.builtin.set_fact:
+    spe_drs_result: "{{ drs_run.stdout | from_json }}"
+  no_log: true

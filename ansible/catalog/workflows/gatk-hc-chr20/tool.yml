@@ -1,0 +1,16 @@
+id: gatk-hc-chr20
+name: GATK4 HaplotypeCaller chr20
+description: Region-restricted GATK4 HaplotypeCaller on chr20 CRAM with truth eval
+organization: local
+toolclass:
+  id: workflow
+  name: Workflow
+  description: Runnable workflow
+version:
+  id: v1
+  descriptor_type: NFL
+  is_production: false
+  author: [local]
+files:
+  - path: main.nf
+    file_type: PRIMARY_DESCRIPTOR

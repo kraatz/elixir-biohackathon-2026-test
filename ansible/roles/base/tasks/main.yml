@@ -1,0 +1,76 @@
+---
+# Baseline for an SPE API instance: packages, Docker, data directory.
+- name: Detect existing Docker apt source
+  ansible.builtin.shell: grep -rls download.docker.com /etc/apt/sources.list.d || true
+  changed_when: false
+  register: docker_source
+
+- name: Add Docker apt repository
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: https://download.docker.com/linux/ubuntu
+    suites: "{{ ansible_distribution_release }}"
+    components: stable
+    signed_by: https://download.docker.com/linux/ubuntu/gpg
+  when: docker_source.stdout | trim | length == 0
+
+- name: Install packages
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+      - git
+      - curl
+      - rsync
+      - ca-certificates
+      - python3-yaml
+      - python3-docker
+      - samtools
+      - bcftools
+      - tabix
+      - age
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Docker daemon configuration
+  ansible.builtin.template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+  notify: Restart docker
+
+- name: Docker enabled and running
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Deploy user may use Docker
+  ansible.builtin.user:
+    name: "{{ spe_ssh_user }}"
+    groups: docker
+    append: true
+
+- name: Reset connection so the docker group applies
+  ansible.builtin.meta: reset_connection
+
+- name: Flush handlers (docker restart before anything uses it)
+  ansible.builtin.meta: flush_handlers
+
+- name: Directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ spe_ssh_user }}"
+    group: "{{ spe_ssh_user }}"
+    mode: "0755"
+  loop:
+    - "{{ spe_data_root }}"
+    - "{{ spe_stack_dir }}"
+    - /opt/spe
+    - /opt/spe/bin

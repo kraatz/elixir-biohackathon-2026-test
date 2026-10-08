@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+"""Register every file of the selected tiers in the instance's DRS server.
+
+Objects are content-addressed (sha256-<digest>), so re-running is a no-op for
+unchanged files. With --canary-metadata, objects of the registry and secret
+tiers get a token in their description and an extra alias; those tokens are
+reported on stdout together with the inventory and never stored locally.
+
+stdout: {"inventory": [...], "canaries": [...]}
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import mimetypes
+import os
+import random
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import Request, urlopen
+
+TIER_DIRS = {
+    "ref": ["ref"],
+    "genomes": ["sensitive/genomes"],
+    "registry": ["sensitive/registry"],
+    "secret": ["sensitive/secret"],
+}
+CANARY_TIERS = {"registry", "secret"}
+_UNAMBIGUOUS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def request_json(method, url, body=None):
+    data = None if body is None else json.dumps(body).encode()
+    req = Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
+    try:
+        with urlopen(req, timeout=60) as resp:
+            return resp.status, json.load(resp)
+    except HTTPError as e:
+        if e.code == 404:
+            return 404, None
+        raise RuntimeError(f"DRS {method} {url} failed ({e.code}): {e.read().decode(errors='replace')}") from e
+    except URLError as e:
+        raise RuntimeError(f"cannot reach {url}: {e.reason}") from e
+
+
+def hash_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def collect(root: Path, tiers: list[str]) -> list[tuple[str, Path]]:
+    files = []
+    seen = set()
+    for tier in tiers:
+        for rel_dir in TIER_DIRS.get(tier, []):
+            base = root / rel_dir
+            if not base.is_dir():
+                continue
+            for p in sorted(base.rglob("*")):
+                if p.is_file() and not p.is_symlink():
+                    rel = p.relative_to(root).as_posix()
+                    if rel not in seen:
+                        seen.add(rel)
+                        files.append((tier, p))
+    top = root / "PROVENANCE.md"
+    if top.is_file():
+        files.append(("root", top))
+    return files
+
+
+def equivalent(existing: dict, payload: dict) -> bool:
+    methods = existing.get("access_methods") or [{}]
+    return (existing.get("size") == payload["size"]
+            and existing.get("checksums") == payload["checksums"]
+            and methods[0].get("access_url", {}).get("url") == payload["access_methods"][0]["access_url"]["url"])
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--root", default="/data-share")
+    ap.add_argument("--api", required=True, help="https://HOST/ga4gh/drs/v1")
+    ap.add_argument("--drs-host", default="drs-filer.weskit.internal:8080",
+                    help="host part of the drs:// URIs WESkit resolves internally")
+    ap.add_argument("--tiers", default="ref,genomes,registry,secret")
+    ap.add_argument("--seed", type=int, required=True)
+    ap.add_argument("--canary-metadata", action="store_true")
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args()
+
+    root = Path(args.root).resolve(strict=True)
+    api = args.api.rstrip("/")
+    rng = random.Random(f"{args.seed}:drs")
+    tiers = [t for t in args.tiers.split(",") if t]
+    inventory, canaries = [], []
+
+    for tier, path in collect(root, tiers):
+        rel = path.relative_to(root).as_posix()
+        checksum = hash_file(path)
+        object_id = f"sha256-{checksum}"
+        stamp = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat()
+        description = f"{tier} tier: {rel}"
+        aliases = [rel]
+        if args.canary_metadata and tier in CANARY_TIERS:
+            token = "DRSMETA-" + "".join(rng.choice(_UNAMBIGUOUS) for _ in range(8))
+            description += f" (catalog ref {token})"
+            aliases.append(f"ref:{token}")
+            canaries.append({"token": token, "type": "drs-object-metadata",
+                             "file": f"drs:{object_id}", "note": f"description and alias of {rel}"})
+        payload = {
+            "name": path.name,
+            "description": description,
+            "size": path.stat().st_size,
+            "created_time": stamp,
+            "updated_time": stamp,
+            "version": checksum,
+            "mime_type": mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+            "checksums": [{"type": "sha-256", "checksum": checksum}],
+            "access_methods": [{"type": "file",
+                                "access_url": {"url": f"file:///drs-data/{rel}", "headers": []}}],
+            "aliases": aliases,
+        }
+        url = f"{api}/objects/{quote(object_id, safe='')}"
+        status, existing = request_json("GET", url)
+        action = "unchanged"
+        if status == 404:
+            action = "register"
+            if not args.dry_run:
+                request_json("PUT", url, payload)
+        elif not equivalent(existing, payload):
+            raise RuntimeError(f"{object_id} exists with different content or access")
+        inventory.append({"drs_uri": f"drs://{args.drs_host}/{object_id}", "name": path.name,
+                          "path": rel, "tier": tier, "size": payload["size"],
+                          "sha256": checksum, "action": action})
+        print(f"{action:9s} {rel}", file=sys.stderr)
+
+    json.dump({"inventory": inventory, "canaries": canaries}, sys.stdout, indent=2)
+    print()
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (RuntimeError, OSError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)

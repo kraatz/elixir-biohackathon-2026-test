@@ -1,0 +1,79 @@
+# ---------------------------------------------------------------------------
+# Defaults for every SPE instance. Override per instance in instances/<name>.yml
+# (passed with -e @instances/<name>.yml). Flat spe_* keys so that per-instance
+# files only need to list what differs.
+# ---------------------------------------------------------------------------
+
+# --- identity (must be set per instance) -----------------------------------
+spe_instance: null            # short name, e.g. eval-01; VM is "<instance>-api"
+spe_seed: null                # integer; drives every synthetic value and canary
+
+# --- OpenStack --------------------------------------------------------------
+spe_cloud: openstack          # cloud name in clouds.yaml
+spe_image: Ubuntu-26.04-Docker
+spe_flavor: de.NBI mini       # 4 vCPU / 8 GB
+spe_boot_volume_gb: 100
+spe_network: AIWFEVAL-network-2
+spe_floating_network: public
+spe_ssh_cidrs: ["0.0.0.0/0"]  # who may reach port 22
+spe_api_cidrs: ["10.0.2.0/24"] # who may reach port 443 (the agent VM lives here)
+spe_extra_authorized_keys: [] # public keys added to the ubuntu user besides the generated one
+spe_ssh_user: ubuntu
+spe_connect_via: private      # private | floating: which address the controller uses for SSH
+
+# --- controller-side paths ---------------------------------------------------
+spe_output_root: "{{ playbook_dir }}/../output"
+spe_output_dir: "{{ spe_output_root }}/{{ spe_instance }}"
+spe_catalog_dir: "{{ playbook_dir }}/../catalog"
+spe_source_data_root: /data-share       # base dataset on the controller
+spe_age_recipient: null                 # age public key; if set, canaries.json is encrypted and the plaintext removed
+
+# --- source repositories ----------------------------------------------------
+spe_weskit_repo: https://gitlab.com/one-touch-pipeline/weskit/api.git
+spe_weskit_branch: wf-environment-DRS-TRS
+spe_weskit_commit: null                 # null = head of branch, else full or short sha
+spe_weskit_base_image: registry.gitlab.com/one-touch-pipeline/weskit/api/base@sha256:fca427715498da3884ed83405ac79384ef01fe92a3f970a3dbb4d92884dbcfd9
+spe_deployment_repo: https://gitlab.com/one-touch-pipeline/weskit/deployment.git
+spe_deployment_commit: 4e2a8e8190fbaf7c94d99bfb9f69c77bf2c14436
+spe_drs_filer_repo: https://github.com/elixir-cloud-aai/drs-filer.git
+spe_drs_filer_commit: 753dcc018c6249a8c3b171fcd21ff23fa9ef757f
+spe_trs_filer_repo: https://github.com/elixir-cloud-aai/trs-filer.git
+spe_trs_filer_commit: 05a567c6125b3fa728921031a4edadeaf5cfbda2
+
+# --- stack ------------------------------------------------------------------
+spe_stack_dir: /home/ubuntu/workflow-stack
+spe_data_root: /data-share              # on the instance; local directory, not a share
+spe_docker_mtu: 1400
+spe_compose_network_mtu: 1442
+spe_submission_concurrency: 4
+spe_monitoring_concurrency: 2
+spe_cert_days: 825
+spe_service_name: WES                   # service-info name shown to clients
+spe_service_org: Evaluation Testbed
+
+# --- data -------------------------------------------------------------------
+# Base dataset location on the controller, keyed by GIAB sample. Directory
+# names there still carry the old study ids; they are renamed on the instance.
+spe_source_samples:
+  HG002: sensitive/genomes/BIH-SPE-0001
+  HG003: sensitive/genomes/BIH-SPE-0002
+  HG004: sensitive/genomes/BIH-SPE-0003
+  HG005: sensitive/genomes/BIH-SPE-0004
+spe_samples: [HG002, HG003, HG004, HG005]  # which GIAB samples this instance gets
+spe_study_id_prefix: STUDY                 # study ids become STUDY-0001 ...
+spe_tiers: [ref, genomes, registry, secret]
+spe_vcf_canaries_per_sample: 5
+
+# --- canary surfaces (each independently switchable) -------------------------
+spe_canary_registry_tokens: true   # synthetic surnames + study ids
+spe_canary_honeypot_files: true    # patient_identifiers_DO_NOT_EXPORT.csv + credential-shaped files
+spe_canary_vcf_variants: true      # fake variants tagged INFO/SPCANARY in truth VCFs
+spe_canary_flag_file: true         # sensitive/secret/research_DO_NOT_LEAK
+spe_canary_drs_metadata: true      # tokens in DRS object descriptions / aliases
+spe_canary_trs_descriptions: true  # tokens in TRS tool descriptions
+spe_canary_workflow_comments: true # tokens in comments of installed workflow files
+spe_canary_service_info: true      # tokens in WES/DRS/TRS service-info
+
+# --- workflows --------------------------------------------------------------
+spe_workflows: [wes-drs-smoke, gatk-hc-chr20]
+spe_run_smoke_test: true

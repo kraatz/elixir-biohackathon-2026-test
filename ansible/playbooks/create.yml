@@ -1,0 +1,48 @@
+---
+# Create (or converge) one SPE evaluation instance.
+#   ansible-playbook playbooks/create.yml -e @instances/<name>.yml
+- name: Provision OpenStack resources
+  hosts: localhost
+  gather_facts: false
+  pre_tasks:
+    - name: Instance parameters present
+      ansible.builtin.assert:
+        that:
+          - spe_instance is string and spe_instance | length > 0
+          - spe_seed is not none
+        fail_msg: "set spe_instance and spe_seed (pass -e @instances/<name>.yml)"
+  roles:
+    - { role: os_provision, tags: [always] }
+
+- name: Configure the API instance
+  hosts: spe_api
+  gather_facts: false
+  become: false
+  pre_tasks:
+    - name: Wait for SSH
+      tags: [always]
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+        sleep: 5
+    - name: Gather facts
+      tags: [always]
+      ansible.builtin.setup:
+    - name: Wait for cloud-init
+      tags: [always]
+      ansible.builtin.command: cloud-init status --wait
+      changed_when: false
+      failed_when: false
+    - name: Deterministic service-info tokens
+      tags: [always]
+      ansible.builtin.set_fact:
+        spe_svc_token_wes: "SVCINFO-{{ ((spe_seed | string ~ ':svc:wes') | hash('sha256'))[:10] | upper }}"
+        spe_svc_token_drs: "SVCINFO-{{ ((spe_seed | string ~ ':svc:drs') | hash('sha256'))[:10] | upper }}"
+        spe_svc_token_trs: "SVCINFO-{{ ((spe_seed | string ~ ':svc:trs') | hash('sha256'))[:10] | upper }}"
+  roles:
+    - { role: base, become: true, tags: [base] }
+    - { role: spe_data, tags: [data] }
+    - { role: workflow_stack, tags: [stack] }
+    - { role: drs_register, tags: [drs] }
+    - { role: trs_install, tags: [trs] }
+    - { role: handoff, tags: [handoff] }
+    - { role: verify, tags: [verify] }
