@@ -469,14 +469,14 @@ Each is recorded back into this spec when settled.
    controller (`clouds.yaml`, `~/.venv-openstack`, `/data-share`), which
    one hosts the first test SPE, and that it meets §7.0's requirements.
 
-1. Open WebUI's combination of model system prompt and terminal `/system`
+2. Open WebUI's combination of model system prompt and terminal `/system`
    prompt (§5 *Prompt*).
-2. How Open WebUI flattens path/query/body parameters into one tool schema
+3. How Open WebUI flattens path/query/body parameters into one tool schema
    (`utils/tools.py`, `convert_openapi_to_tool_payload` or equivalent), so
    our generated schemas match.
-3. Current Pydantic AI APIs used: `AGUIAdapter.dispatch_request`,
+4. Current Pydantic AI APIs used: `AGUIAdapter.dispatch_request`,
    `UsageLimits` fields, building a tool from a JSON schema
    (`Tool.from_schema` or equivalent).
-4. CopilotKit v2 package names and the `HttpAgent` headers option.
-5. That a read-only root filesystem works for the Next.js and uvicorn
+5. CopilotKit v2 package names and the `HttpAgent` headers option.
+6. That a read-only root filesystem works for the Next.js and uvicorn
    images; drop it for a container where it does not, and say so here.
