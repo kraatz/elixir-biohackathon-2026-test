@@ -221,7 +221,8 @@ the instance runs on the controller.
 
 Tested on the development VM on 2026-10-15 with `anthropic`/`claude-haiku-5-5`:
 create, a second converge without rebuilds or restarts, `verify.yml`, and switching
-to Open WebUI and back. Model-backed runs pending approval.
+to Open WebUI and back; then, with the model, the smoke run (`-e spe_agui_smoke=true`) and a
+two-turn chat in the browser, both passing.
 
 ## Not covered yet
 

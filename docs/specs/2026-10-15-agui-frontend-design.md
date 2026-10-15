@@ -564,5 +564,5 @@ endpoint, no model call).
 **Observed results (development VM, `anthropic`/`claude-haiku-5-5`):** create,
 converge without rebuild or restart, `verify.yml`, frontend switching both ways, the
 key boundary and the browser UI against a scripted agent — all without model calls.
-**Pending, paid, awaiting approval:** the smoke run, a two-turn chat with the real
-model, and the starter promptfoo suite. **Pending, operator:** the de.NBI deployment.
+Real-model results (dev VM, `anthropic`/`claude-haiku-5-5`, 2026-10-15, approved by the user): the AG-UI smoke run through `verify.yml -e spe_agui_smoke=true` passed (`run_command`, `get_process_status`, `run_command`, `RUN_FINISHED`; `failed=0`); a two-turn chat in the browser showed 3 then 1 tool cards and answered the second turn from the first turn's history, no error, no key in any response; the promptfoo starter suite passed 3 of 3 with no key in the report. All 8 runs together: 27 model requests, 244,099 input and 5,035 output tokens (about $0.03 at the spec's prices).
+**Pending, operator:** the de.NBI deployment and its model-backed checks.

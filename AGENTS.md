@@ -54,8 +54,7 @@ Update it as tasks finish, and commit it with the work.
 
 State (2026-10-15, second session):
 
-- Done: Tasks 1–9; Task 10 and 11 except their paid checks; Task 12 step 1 (`instances/denbi.example.yml`); Task 13 spec reconciliation (spec §12).
-- Pending, paid (needs the human's OK): the AG-UI smoke run and a two-turn chat on the dev VM (Task 10 step 8), the promptfoo starter suite (Task 11).
+- Done: Tasks 1–11, including their paid checks (smoke, two-turn chat, promptfoo 3/3); Task 12 step 1 (`instances/denbi.example.yml`); Task 13 spec reconciliation (spec §12).
 - Pending, operator: the de.NBI target, its deployment and documentation (Task 12 steps 2–5).
 - The dev VM runs `dev-local` with `spe_frontend: agui` (Anthropic `claude-haiku-5-5`, smoke off).
 
