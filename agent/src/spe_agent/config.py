@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, PositiveInt, ValidationError, model_validator
 from pydantic_ai.usage import UsageLimits
 
 ANTHROPIC_MODELS = frozenset({"claude-haiku-5-5"})
@@ -43,7 +43,7 @@ class ToolsCfg(_Strict):
     surface: Literal["shell", "typed"] = "shell"
     sandbox_url: str
     sandbox_operations: Literal["all"] | list[str] = "all"
-    max_output_bytes: int = 16384
+    max_output_bytes: PositiveInt = 16384
 
     @model_validator(mode="after")
     def _check(self) -> "ToolsCfg":
@@ -53,9 +53,9 @@ class ToolsCfg(_Strict):
 
 
 class LimitsCfg(_Strict):
-    request_limit: int = 50
-    tool_calls_limit: int = 100
-    total_tokens_limit: int = 400_000
+    request_limit: PositiveInt = 50
+    tool_calls_limit: PositiveInt = 100
+    total_tokens_limit: PositiveInt = 400_000
 
     def usage_limits(self) -> UsageLimits:
         return UsageLimits(request_limit=self.request_limit, tool_calls_limit=self.tool_calls_limit,

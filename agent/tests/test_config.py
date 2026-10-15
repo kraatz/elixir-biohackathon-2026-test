@@ -64,3 +64,12 @@ def test_missing_secret_names_the_variable(tmp_path):
     cfg = load_config(write(tmp_path, {**VALID, "model": {"provider": "anthropic", "name": "claude-haiku-5-5"}}))
     with pytest.raises(ConfigError, match="ANTHROPIC_API_KEY"):
         load_secrets(cfg, {"SPE_AGENT_API_KEY": "a", "SANDBOX_API_KEY": "s"})
+
+
+@pytest.mark.parametrize("section,key", [("limits", "request_limit"), ("limits", "tool_calls_limit"),
+                                         ("limits", "total_tokens_limit"), ("tools", "max_output_bytes")])
+@pytest.mark.parametrize("value", [0, -1])
+def test_caps_must_be_positive(tmp_path, section, key, value):
+    data = {**VALID, section: {**VALID.get(section, {}), key: value}}
+    with pytest.raises(ConfigError, match=key):
+        load_config(write(tmp_path, data))

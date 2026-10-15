@@ -19,7 +19,8 @@ at the first task not marked done.
 | 5 Shared `sandbox` role | done | Open WebUI templates render identically before/after (`diff -r` → SAME); `create.yml` syntax check clean. First real build of the role on the VM happens in Task 10 |
 | 6 Agent package and config | done, `80b2ae9` | 7 tests |
 | 7 Sandbox tools from OpenAPI | done | Adapter and provenance documented in `agent/README.md`; 50 sandbox tests plus 7 configuration tests pass offline; no paid calls |
-| 8–13 | not started | |
+| 8 Agent loop, AG-UI, run log, image | done | 90 offline agent tests (25 service, 15 config, 50 sandbox), also run in the image's `test` stage; image checks against a real open-terminal 0.12.4: 503 unready, 401 without/wrong key, 200 with 16 tools after the sandbox started and again after it restarted, Docker `healthy`, uid 10001, read-only root, `cap_drop ALL`, no keys in the logs. `claude-haiku-5-5` confirmed `active` via the free model-info endpoint; no paid calls |
+| 9–13 | not started | |
 
 No paid model calls have been made. Each step that makes paid calls still needs the human's OK first.
 
@@ -75,3 +76,10 @@ response text. Cost: an intentional sandbox-key probe differs from the baseline.
 - Task 4: a reset also refuses a path that is or holds a mount point, and, when the host is the controller, a path overlapping `spe_source_data_root` or `spe_output_root` (the dev VM's `spe_data_root` is `/data-share`, the default name of the shared GIAB dataset). Cost: a host whose instance directory is its own mount cannot be reset by the playbook.
 - Task 4: OpenStack teardown still runs without a hand-off file (creation may have failed before writing it); only a hand-off that disagrees with the instance file refuses. Existing-VM resets require it. Cost: an OpenStack instance file pointed at the wrong cloud still deletes by name, as before.
 - Task 4: `update-ca-certificates` without `--fresh`, and only when the anchor was removed: removing a file from `/usr/local/share/ca-certificates` is enough for it to drop the link, and `--fresh` would rebuild every other link on the host. Cost: none expected.
+- Task 8: prompt order verified in Open WebUI v0.11.3 (`2a960a5`): model prompt, `\n`, terminal `/system` prompt. Client-sent system messages are stripped (`manage_system_prompt='server'`). Cost: none expected.
+- Task 8: after readiness the agent probes the sandbox's `/openapi.json` every 30 s and drops to 503 when it fails, rediscovering with backoff (1 s doubling to 30 s). Cost: up to 30 s of 200 while the sandbox is down; runs then get tool errors, not 503.
+- Task 8: the run log is built from the AG-UI events the client receives; a tool call's duration is measured from the end of its arguments to its result. Usage comes from `on_complete`, so failed and cancelled runs have no usage. Cost: durations include scheduling time; failed runs' spend is not recorded.
+- Task 8: `RUN_ERROR` messages are redacted and cut to 500 characters; log fields are cut to 16384 bytes. Cost: long provider errors lose their tail.
+- Task 8: `limits` and `tools.max_output_bytes` must be positive (`PositiveInt`); four parametrised config tests added to `test_config.py`. Cost: none.
+- Task 8: `create_app(..., retry_delay, max_retry_delay, probe_interval)` keyword arguments beyond the plan's signature, for tests. Cost: none.
+- Task 8: malformed AG-UI bodies get 422 with pydantic errors minus their input (Pydantic AI's `validation_error_response` is private in 2.56). Cost: none.

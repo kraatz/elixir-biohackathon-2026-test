@@ -1,9 +1,84 @@
 # SPE agent
 
-Task 6 provides configuration; Task 7 provides the open-terminal adapter in
-`src/spe_agent/sandbox.py`. The agent loop and HTTP service are not implemented yet.
+A Pydantic AI pentest agent for one SPE instance, served over AG-UI. It holds the
+LLM key and calls the open-terminal sandbox, where model-chosen commands run; it
+runs no commands itself. Deployed by the `agui` Ansible role next to the sandbox and
+the chat UI (`docs/specs/2026-10-15-agui-frontend-design.md`).
 
-Run the offline tests with `uv run --group dev pytest -q` from this directory.
+```bash
+uv run --group dev pytest -q                   # offline tests: no LLM, no network
+docker build -t spe-agent:dev .                # runs the same tests in its `test` stage
+SPE_AGENT_CONFIG=agent.yaml SPE_AGENT_API_KEY=… SANDBOX_API_KEY=… ANTHROPIC_API_KEY=… \
+  uv run python -m spe_agent                   # serves :8100
+```
+
+## Service
+
+- `POST /agent`: AG-UI `RunAgentInput` in, server-sent events out, through
+  `AGUIAdapter` (pydantic-ai-slim 2.56.0, `pydantic_ai/ui/_adapter.py`). Requires
+  `Authorization: Bearer <SPE_AGENT_API_KEY>`; the key is checked before readiness, so
+  an unauthenticated request always gets 401. A malformed body gets 422 without the
+  input echoed back.
+- `GET /healthz`: no auth, no LLM call. 200 `{"status": "ok", "tools": N}` once the
+  sandbox's tools are discovered, else 503 with a reason.
+
+**Readiness.** uvicorn starts at once. A background task fetches the sandbox's
+`/openapi.json`, `/files/cwd`, `/api/config` and `/system` with backoff (1 s doubling
+to 30 s) and builds the agent; until then authenticated `/agent` requests get 503.
+When ready it probes `/openapi.json` every 30 s; if the sandbox stops answering the
+service returns to 503 and rediscovers, so a sandbox restart needs no agent restart.
+A run in progress keeps the agent it started with. An allowlisted operation the
+sandbox does not offer keeps the service at 503 with that reason.
+
+**Configuration.** `agent.yaml` (`SPE_AGENT_CONFIG`, default
+`/etc/spe-agent/agent.yaml`), validated at startup; unknown keys, `surface: typed`,
+an Anthropic model other than `claude-haiku-5-5`, non-positive limits or caps and a
+missing prompt file stop the process with exit 2. Keys come from the environment
+only: `SPE_AGENT_API_KEY`, `SANDBOX_API_KEY`, and `OPENAI_API_KEY` or
+`ANTHROPIC_API_KEY` by provider.
+
+**Prompt.** `prompt.file`, then a newline, then the sandbox's `/system` prompt (when
+`prompt.include_sandbox_prompt` and `/api/config` lists `features.system`). That is
+Open WebUI v0.11.3's order (commit `2a960a5`): `utils/middleware.py` appends the
+terminal prompt to the system message (`add_or_update_system_message(...,
+append=True)`), and `routers/openai.py` later prepends the model's prompt
+(`apply_system_prompt_to_body`), both joined with `\n`
+(`utils/misc.py`, `update_message_content`). System messages sent by the client are
+stripped (`manage_system_prompt='server'`); the agent's prompt is reinjected.
+
+**Runs.** Each request builds its history from the request alone (AG-UI
+`RunAgentInput.messages`, including earlier tool calls and results); nothing is
+shared between requests. The AG-UI thread id is sent to the sandbox as
+`X-Session-Id`, as Open WebUI sends its chat id. Per run, `UsageLimits` caps model
+requests (`limits.request_limit`, 50), tool calls (`tool_calls_limit`, 100) and total
+tokens (`total_tokens_limit`, 400000). These are per-run caps, not a spend budget:
+the provider account's spend limit is the aggregate cap.
+
+A run ends with exactly one terminal event: `RUN_FINISHED`, or `RUN_ERROR` for a
+provider error, an exceeded limit or any other failure. The error message has the
+three key values replaced by `[redacted]` and is cut to 500 characters. When the
+client disconnects, the agent run and its model request are cancelled. Commands the
+model started in the sandbox in the background keep running there; stop them with
+the sandbox's `kill_process` operation (the agent's own tool) or by restarting the
+sandbox container (`docker compose -p spe-frontend restart sandbox`).
+
+**Run log.** One JSON line per completed, failed or cancelled run in `run_log`
+(default `/var/lib/spe-agent/runs.jsonl`, a named volume): run and thread ids, start
+and end times, status, the last user message, each tool call (name, arguments,
+result, seconds from the end of the call's arguments to its result), the answer,
+usage (requests, tool calls, input and output tokens; absent for failed runs) and
+the error. Every string, keys of mappings included, has the three key values
+redacted, and each field is cut to 16384 bytes. The file is created 0600 in a 0700
+directory; records are written whole under a lock. **The log holds player input and
+tool results, which include scenario canaries: keep it out of git and do not
+publish it.**
+
+**Image.** `Dockerfile`: `python:3.13-slim`, dependencies from the frozen `uv.lock`
+(uv 0.12.17), the offline suite run in the `test` stage (the final stage depends on
+it), user `spe` (uid 10001), port 8100, `HEALTHCHECK` on `/healthz`. Verified to run
+with a read-only root filesystem, a `/tmp` tmpfs, `cap_drop: ALL` and
+`no-new-privileges`, with `/var/lib/spe-agent` as a writable volume owned by uid
+10001. `.dockerignore` admits only `pyproject.toml`, `uv.lock`, `src/` and `tests/`.
 
 ## Sandbox tools
 
@@ -50,5 +125,4 @@ Differences and limits:
 - Sandbox credentials are redacted from responses; transport exception details
   are not exposed. Owned clients disable environment proxy settings.
 
-Validation: 50 sandbox tests and 7 configuration tests pass offline. No live
-sandbox deployment or paid model calls are needed for Task 7.
+Tests: 50 sandbox, 15 configuration and 25 service tests, all offline.
