@@ -18,7 +18,7 @@ at the first task not marked done.
 | 4 Reset instead of delete | not started | |
 | 5 Shared `sandbox` role | not started | |
 | 6 Agent package and config | done, `80b2ae9` | 7 tests |
-| 7 Sandbox tools from OpenAPI | tests and fixture committed; **`agent/src/spe_agent/sandbox.py` not written** | `agent/tests/test_sandbox.py` fails at import until the module exists |
+| 7 Sandbox tools from OpenAPI | done | Adapter and provenance documented in `agent/README.md`; 50 sandbox tests plus 7 configuration tests pass offline; no paid calls |
 | 8–13 | not started | |
 
 No paid model calls have been made. Each step that makes paid calls still needs the human's OK first.
@@ -54,3 +54,19 @@ No paid model calls have been made. Each step that makes paid calls still needs 
 - Task 7: 3xx responses are returned as an error result and not followed. Cost: none expected.
 - Task 7: `build_tools(..., cwd=...)` and `SandboxClient.call(..., session_id=...)` (AG-UI thread id sent as `X-Session-Id`) go beyond the plan's signatures. Cost: two extra keyword arguments.
 - Task 7: responses are streamed, at most 1 MiB is kept and the total is counted for the marker; a tool result, marker included, is at most `max_output_bytes`.
+
+## Task 7 completion (2026-10-15)
+
+Implemented only Task 7 on resumption, as requested. Verified the installed
+Pydantic AI 2.56.0 `Tool.from_schema` API, implemented discovery and tool calls,
+and expanded the handoff tests for encoded paths, injected-client auth/redirect
+settings, malformed discovery, credential redaction and small output caps.
+`uv run --group dev pytest -q` in `agent/`: 57 passed. Tasks 3–5 and 8–13
+remain at their earlier status; stop here.
+
+Additional Task 7 rulings: a 30-second total deadline bounds response counting
+as well as per-I/O timeouts; responses exceeding that deadline return a timeout
+error. Cost: very long streaming responses do not yield partial output. Tiny
+output caps return a partial marker when a complete marker cannot fit. Cost:
+those markers are not machine-parseable. Sandbox credentials are redacted from
+response text. Cost: an intentional sandbox-key probe differs from the baseline.

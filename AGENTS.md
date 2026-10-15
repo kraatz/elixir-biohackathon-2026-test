@@ -52,7 +52,7 @@ At the handoff:
 
 - Done: Task 1 (existing-VM provisioning, `dec71fa`), Task 2 (dummy dataset, `9d45036`), Task 6 (agent config, `80b2ae9`).
 - Task 3 (SPE stack on the dev VM): the first full run and the endpoint checks passed. On the re-run, `workflow_stack : Whole stack up` reported `changed`; this has not been debugged. `verify.yml` and the README note are still open.
-- Task 7: the open-terminal 0.12.4 OpenAPI fixture and `agent/tests/test_sandbox.py` are committed (`1904b22`). The module they test, `agent/src/spe_agent/sandbox.py`, is not written. The previous session stopped while writing it and left nothing behind, so write it fresh against those tests.
+- Task 7 was completed on resumption (2026-10-15): OpenAPI adapter, discovery, bounded tool responses and 50 sandbox tests; all 57 agent tests pass. See the progress file and `agent/README.md`. The user requested stopping after Task 7; other unfinished tasks remain unchanged.
 - Not started: Tasks 4, 5 and 8–13. No paid model calls have been made.
 
 **To resume**, start a session in the worktree

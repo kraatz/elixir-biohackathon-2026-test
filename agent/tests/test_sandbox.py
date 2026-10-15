@@ -300,3 +300,62 @@ async def test_owned_client_is_closed_injected_is_not():
     owned = SandboxClient(BASE, KEY)
     await owned.aclose()
     assert owned._http.is_closed
+
+
+@pytest.mark.parametrize("value, encoded", [
+    ("%2e%2e", "%252e%252e"),
+    ("%2Fadmin", "%252Fadmin"),
+    ("//elsewhere/a", "%2F%2Felsewhere%2Fa"),
+    ("a\\..\\b", "a%5C..%5Cb"),
+])
+async def test_encoded_paths_stay_on_sandbox_route(value, encoded):
+    rec = Recorder()
+    await client_for(rec).call(OPS["get_process_status"], {"process_id": value})
+    req = rec.requests[0]
+    assert req.url.raw_path == f"/execute/{encoded}/status".encode()
+    assert req.url.host == "sandbox"
+
+
+async def test_injected_client_cannot_override_bearer_or_follow_redirects():
+    rec = Recorder(lambda r: httpx.Response(307, headers={"location": "https://elsewhere/"}))
+    async with httpx.AsyncClient(transport=httpx.MockTransport(rec),
+                                auth=("other", "password"), follow_redirects=True) as http:
+        await SandboxClient(BASE, KEY, http=http).call(OPS["list_processes"], {})
+    assert len(rec.requests) == 1
+    assert rec.requests[0].headers["authorization"] == f"Bearer {KEY}"
+
+
+async def test_model_arguments_cannot_set_origin_or_headers():
+    rec = Recorder()
+    await client_for(rec).call(OPS["list_processes"], {
+        "base_url": "https://elsewhere", "headers": {"Authorization": "evil"},
+    })
+    assert rec.requests[0].url.host == "sandbox"
+    assert rec.requests[0].headers["authorization"] == f"Bearer {KEY}"
+
+
+@pytest.mark.parametrize("payload", [[], {"paths": []}, {"info": {}}, "broken"])
+async def test_malformed_discovery_is_unavailable(payload):
+    with pytest.raises(SandboxUnavailable):
+        await client_for(Recorder(lambda r: httpx.Response(200, json=payload))).openapi()
+
+
+async def test_errors_do_not_echo_credentials_or_exception_details():
+    rec = Recorder(lambda r: httpx.Response(500, text=f"failed with {KEY}"))
+    assert KEY not in await client_for(rec).call(OPS["list_processes"], {})
+
+    def fail(request):
+        raise httpx.ConnectError(f"private details {KEY}", request=request)
+    result = await client_for(Recorder(fail)).call(OPS["list_processes"], {})
+    assert "private details" not in result and KEY not in result
+
+
+@pytest.mark.parametrize("cap", [0, 1, 20, 50, 100])
+def test_truncation_small_caps(cap):
+    assert len(truncate("é" * 1000, cap).encode()) <= cap
+
+
+async def test_discovery_response_limit():
+    rec = Recorder(lambda r: httpx.Response(200, content=b" " * (1024 * 1024 + 1)))
+    with pytest.raises(SandboxUnavailable):
+        await client_for(rec).openapi()
