@@ -132,7 +132,7 @@ def _messages(prompt: str, context: dict | None) -> list[dict]:
 def call_api(prompt: str, options: dict | None = None, context: dict | None = None) -> dict:
     config = (options or {}).get("config") or {}
     url = config.get("url") or os.environ.get("SPE_AGENT_URL", DEFAULT_URL)
-    timeout = float(config.get("timeout", DEFAULT_TIMEOUT))
+    timeout = float(config.get("run_timeout_s", DEFAULT_TIMEOUT))
     try:
         key = _key()
     except OSError as e:

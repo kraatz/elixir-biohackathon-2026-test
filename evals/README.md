@@ -58,7 +58,7 @@ The provider: `call_api(prompt, options, context)` posts a `RunAgentInput` with 
 thread and run ids (returned in `metadata`, matching the agent's run log), plus
 earlier turns from an optional `vars.history`; parses the SSE stream incrementally;
 and returns `{output, metadata: {tool_calls: [{id, name, args, result}], terminal,
-events, run_id, thread_id}}`. HTTP errors, `RUN_ERROR`, timeouts (`config.timeout`,
-600 s), malformed events and a stream without a terminal event become `error`. The
+events, run_id, thread_id}}`. HTTP errors, `RUN_ERROR`, timeouts
+600 s, `config.run_timeout_s`), malformed events and a stream without a terminal event become `error`. The
 agent's AG-UI stream carries no token usage, so none is reported; the agent's run
 log has it.

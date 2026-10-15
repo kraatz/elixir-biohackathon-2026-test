@@ -159,7 +159,7 @@ def test_missing_key_is_an_error(monkeypatch):
 
 def test_timeout_is_an_error(agent, monkeypatch):
     monkeypatch.setenv("SPE_AGENT_URL", "http://10.255.255.1:9/agent")  # unroutable
-    res = agui_provider.call_api("x", {"config": {"timeout": 0.5}}, {})
+    res = agui_provider.call_api("x", {"config": {"run_timeout_s": 0.5}}, {})
     assert "error" in res
 
 
