@@ -63,6 +63,8 @@ and compose projects): the marker alone excuses nothing. Set
 else; `base` then leaves its packages, `daemon.json` and service alone.
 `instances/dev-local.example.yml` configures the development VM itself.
 
+Tested on the agentvm development VM (dummy dataset, spe_manage_docker: false), 2026-10-15.
+
 ## What create.yml does
 
 1. **os_provision** (controller): keypair `<instance>-key` (private key saved

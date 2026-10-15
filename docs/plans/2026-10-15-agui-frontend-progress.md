@@ -14,7 +14,7 @@ at the first task not marked done.
 |---|---|---|
 | 1 Existing-host provisioning | done, `dec71fa` | 17 preflight tests; `base` on the dev VM left `daemon.json` unchanged; another instance refused (`failed=1`); re-run `changed=0` |
 | 2 Dummy dataset | done, `9d45036` | 5 tests; dataset in `/home/agentvm/spe-dummy-data` (seed 1, 1.4 MB) |
-| 3 SPE stack on the dev VM | steps 1–4 run; 5–6 open | full `create.yml`: `failed=0`, smoke `COMPLETE`; WES/TRS/DRS all `200` with `output/dev-local/ca.crt`. Re-run: `failed=0`, `changed=7`, **but `workflow_stack : Whole stack up` reported changed** (plan expects only `Seed instance data`). Not yet debugged: Task 1 did not touch `workflow_stack`, so probably existing behaviour; check before calling step 4 met. Also changed: `drs_register`, `trs_install`, `spe_data` ownership, two handoff files. Open: `verify.yml` (step 5), README note (step 6) |
+| 3 SPE stack on the dev VM | done | full `create.yml`: `failed=0`, smoke `COMPLETE`; WES/TRS/DRS all `200` with `output/dev-local/ca.crt`. Re-run `changed` in `Whole stack up` was the one-shot `weskit-data-init` container being started again; fixed in `d62ef54` (stack re-run `changed=0`). `verify.yml` alone: `failed=0`, smoke `COMPLETE`. README note added |
 | 4 Reset instead of delete | not started | |
 | 5 Shared `sandbox` role | not started | |
 | 6 Agent package and config | done, `80b2ae9` | 7 tests |
