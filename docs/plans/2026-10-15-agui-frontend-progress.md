@@ -15,7 +15,7 @@ at the first task not marked done.
 | 1 Existing-host provisioning | done, `dec71fa` | 17 preflight tests; `base` on the dev VM left `daemon.json` unchanged; another instance refused (`failed=1`); re-run `changed=0` |
 | 2 Dummy dataset | done, `9d45036` | 5 tests; dataset in `/home/agentvm/spe-dummy-data` (seed 1, 1.4 MB) |
 | 3 SPE stack on the dev VM | done | full `create.yml`: `failed=0`, smoke `COMPLETE`; WES/TRS/DRS all `200` with `output/dev-local/ca.crt`. Re-run `changed` in `Whole stack up` was the one-shot `weskit-data-init` container being started again; fixed in `d62ef54` (stack re-run `changed=0`). `verify.yml` alone: `failed=0`, smoke `COMPLETE`. README note added |
-| 4 Reset instead of delete | not started | |
+| 4 Reset instead of delete | done | 18 reset-plan tests (35 preflight tests total); refused without confirmation, with mismatched `spe_provision`, with a path not in the manifest, with a mismatched instance (all `failed=1`, stack untouched); confirmed reset `failed=0`: marker, manifest, three directories, CA anchor, containers and project volumes gone, while `daemon.json`, other containers/volumes, images, the dummy dataset and `output/dev-local` were unchanged; re-create `failed=0`, smoke `COMPLETE` |
 | 5 Shared `sandbox` role | not started | |
 | 6 Agent package and config | done, `80b2ae9` | 7 tests |
 | 7 Sandbox tools from OpenAPI | done | Adapter and provenance documented in `agent/README.md`; 50 sandbox tests plus 7 configuration tests pass offline; no paid calls |
@@ -70,3 +70,8 @@ error. Cost: very long streaming responses do not yield partial output. Tiny
 output caps return a partial marker when a complete marker cannot fit. Cost:
 those markers are not machine-parseable. Sandbox credentials are redacted from
 response text. Cost: an intentional sandbox-key probe differs from the baseline.
+- Task 3: the re-run `changed` in `Whole stack up` was the one-shot `weskit-data-init` container, started again by every `compose up`; `changed_when` now ignores actions on that container alone (`d62ef54`). Cost: a real change confined to that container goes unreported.
+- Task 4: the reset guards live in `spe_preflight.py` as a `reset` mode (`reset_plan`), tested with a fake host, instead of inline assert tasks; it shares the path-safety helpers with the create preflight. Cost: one script with two modes.
+- Task 4: a reset also refuses a path that is or holds a mount point, and, when the host is the controller, a path overlapping `spe_source_data_root` or `spe_output_root` (the dev VM's `spe_data_root` is `/data-share`, the default name of the shared GIAB dataset). Cost: a host whose instance directory is its own mount cannot be reset by the playbook.
+- Task 4: OpenStack teardown still runs without a hand-off file (creation may have failed before writing it); only a hand-off that disagrees with the instance file refuses. Existing-VM resets require it. Cost: an OpenStack instance file pointed at the wrong cloud still deletes by name, as before.
+- Task 4: `update-ca-certificates` without `--fresh`, and only when the anchor was removed: removing a file from `/usr/local/share/ca-certificates` is enough for it to drop the link, and `--fresh` would rebuild every other link on the host. Cost: none expected.

@@ -65,6 +65,19 @@ else; `base` then leaves its packages, `daemon.json` and service alone.
 
 Tested on the agentvm development VM (dummy dataset, spe_manage_docker: false), 2026-10-15.
 
+`destroy.yml` never deletes an existing VM. It resets it — compose stacks
+down with their volumes, the stack, frontend and data directories, the CA
+anchor, the manifest and `/etc/spe-instance` removed — and only with
+`-e spe_confirm_reset=<instance>` on a host whose marker and manifest name
+that instance. Before anything is removed it checks that `output/<instance>/hosts.yml`
+records the same instance and `spe_provision` (so an edited instance file
+cannot turn a reset into an OpenStack deletion, or the reverse), and that
+every path is the one recorded at creation, is not a symlink, a mount point
+or a home directory, and does not overlap Docker's data root or, on the
+controller itself, the base dataset and the output directory. Compose
+projects are taken down by name, from the file their containers were created
+from; Docker is never pruned. Built images and `output/<instance>/` are kept.
+
 ## What create.yml does
 
 1. **os_provision** (controller): keypair `<instance>-key` (private key saved

@@ -12,6 +12,15 @@ any existing instance path, listener on a requested port or running compose
 project of ours belongs to someone else. A matching marker must come with the
 manifest written at creation, and every path, listener and project must be
 the ones it records: the marker alone excuses nothing.
+
+With "mode": "reset" (destroy.yml) the argument is instead
+  {mode, instance, provision, marker, manifest, paths: {name: abs path},
+   projects: {compose project: compose file}, shared: [paths never to remove]}
+and the output {"problems": [...], "paths": [...], "projects": [{name, file}]}
+names exactly what may be removed: the marker and the manifest must name this
+instance and mode, every path must be the one recorded, safe, not a symlink,
+not a mount or holding one, clear of Docker's data root and the shared paths,
+and every compose project must be recorded and built from its own file.
 """
 from __future__ import annotations
 
@@ -63,6 +72,19 @@ class Host:
     def docker_root(self) -> str | None:
         out = self._docker("info", "--format", "{{.DockerRootDir}}")
         return out[0].strip() if out else None
+
+    def project_config_files(self, project: str) -> set[str]:
+        labels = self._docker("ps", "-a", "--filter", f"label=com.docker.compose.project={project}",
+                              "--format", '{{.Label "com.docker.compose.project.config_files"}}')
+        return {f for line in labels for f in line.split(",") if f}
+
+    def mounts(self) -> list[str]:
+        try:
+            with open("/proc/self/mounts") as f:
+                # Octal escapes (\040 for a space) as in fstab.
+                return [line.split()[1].encode().decode("unicode_escape") for line in f if line.strip()]
+        except OSError:
+            return ["/"]
 
 
 def existing_ancestor(path: str) -> str:
@@ -173,9 +195,81 @@ def check(cfg: dict, host) -> dict:
     return {"owner": owner, "problems": problems, "resolved": resolved}
 
 
+def reset_plan(cfg: dict, host) -> dict:
+    problems: list[str] = []
+    instance, provision = cfg["instance"], cfg.get("provision")
+    owner = read_marker(cfg["marker"])
+    if not owner:
+        problems.append(f"no ownership marker {cfg['marker']}: nothing here is known to belong to {instance}")
+    elif owner != instance:
+        problems.append(f"host belongs to instance '{owner}', not '{instance}'")
+    manifest = read_manifest(cfg["manifest"]) or {}
+    if not manifest:
+        problems.append(f"ownership manifest {cfg['manifest']} is missing or unreadable")
+    elif manifest.get("instance") != instance or manifest.get("provision") != provision:
+        problems.append(f"manifest {cfg['manifest']} is for instance {manifest.get('instance')!r} "
+                        f"({manifest.get('provision')!r}), not {instance!r} ({provision!r})")
+    recorded_paths = manifest.get("paths", {})
+    recorded_projects = set(manifest.get("compose_projects", []))
+
+    docker_root = host.docker_root()
+    shared = [os.path.realpath(p) for p in cfg.get("shared", []) if p]
+    mounts = [os.path.normpath(m) for m in host.mounts()]
+    paths: list[str] = []
+    for name, path in cfg["paths"].items():
+        why = unsafe(path)
+        if why:
+            problems.append(f"{name} {path} {why}")
+            continue
+        if os.path.islink(path):
+            problems.append(f"{name} {path} is a symlink; nothing behind it is removed")
+            continue
+        real = os.path.realpath(path)
+        if recorded_paths.get(name) != real:
+            problems.append(f"{name} {real} is not the path the manifest records ({recorded_paths.get(name)!r})")
+            continue
+        if docker_root and (inside(real, docker_root) or inside(docker_root, real)):
+            problems.append(f"{name} {real} overlaps Docker's data root {docker_root}")
+            continue
+        clash = [p for p in shared if inside(real, p) or inside(p, real)]
+        if clash:
+            problems.append(f"{name} {real} overlaps shared data {', '.join(clash)}")
+            continue
+        held = [m for m in mounts if inside(m, real)]
+        if held:
+            problems.append(f"{name} {real} is or holds a mount point ({', '.join(held)})")
+            continue
+        paths.append(real)
+
+    owned = [os.path.realpath(p) for p in cfg["paths"].values() if not unsafe(p)]
+    projects: list[dict] = []
+    for name, file in sorted(cfg.get("projects", {}).items()):
+        if name not in recorded_projects:
+            problems.append(f"compose project {name} is not recorded in the manifest")
+            continue
+        real = os.path.realpath(file)
+        if not any(inside(real, o) for o in owned):
+            problems.append(f"compose project {name}: file {file} lies outside this instance's paths")
+            continue
+        built_from = host.project_config_files(name)
+        foreign = sorted(f for f in built_from if os.path.realpath(f) != real)
+        if foreign:
+            problems.append(f"compose project {name} has containers from {', '.join(foreign)}, not {file}")
+            continue
+        if os.path.isfile(real):
+            projects.append({"name": name, "file": real})
+        elif built_from or name in host.running_projects():
+            problems.append(f"compose project {name} has containers but its file {file} is missing")
+
+    if problems:
+        paths, projects = [], []
+    return {"problems": problems, "paths": paths, "projects": projects}
+
+
 def main() -> int:
     cfg = json.loads(base64.b64decode(sys.argv[1]))
-    json.dump(check(cfg, Host()), sys.stdout)
+    result = reset_plan(cfg, Host()) if cfg.get("mode") == "reset" else check(cfg, Host())
+    json.dump(result, sys.stdout)
     print()
     return 0
 

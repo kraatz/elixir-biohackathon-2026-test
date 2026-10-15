@@ -178,3 +178,194 @@ def test_cli_prints_json(tmp_path):
     arg = base64.b64encode(json.dumps(c).encode()).decode()
     out = subprocess.run([sys.executable, str(SCRIPT), arg], check=True, capture_output=True, text=True).stdout
     assert "problems" in json.loads(out)
+
+
+# --- reset: what destroy.yml may remove from an existing host ------------------------------
+
+class ResetHost(FakeHost):
+    """Adds the compose files each project's containers were created from, and mount points."""
+
+    def __init__(self, project_files=None, mounts=("/",), **kw):
+        super().__init__(**kw)
+        self.project_files = project_files or {}
+        self.mount_points = list(mounts)
+
+    def project_config_files(self, project):
+        return self.project_files.get(project, set())
+
+    def mounts(self):
+        return self.mount_points
+
+
+def reset_cfg(tmp_path, **over):
+    c = cfg(tmp_path)
+    p = c["paths"]
+    c.update({
+        "mode": "reset",
+        "projects": {
+            "workflow-stack": p["stack_dir"] + "/deployment/compose.install.yaml",
+            "spe-frontend": p["frontend_dir"] + "/docker-compose.yml",
+        },
+        "shared": [str(tmp_path / "dataset")],
+    })
+    c.pop("ports"); c.pop("min_free_gb")
+    c.update(over)
+    return c
+
+
+def created(c, instance="dev-local", provision="existing", paths=None, projects=None):
+    """The host as create.yml leaves it: marker, manifest, directories, compose files."""
+    Path(c["marker"]).write_text(instance + "\n")
+    Path(c["manifest"]).write_text(json.dumps({
+        "instance": instance, "provision": provision,
+        "paths": paths if paths is not None else c["paths"],
+        "compose_projects": projects if projects is not None else sorted(c["projects"]),
+    }))
+    for d in c["paths"].values():
+        Path(d).mkdir(parents=True, exist_ok=True)
+    for f in c["projects"].values():
+        Path(f).parent.mkdir(parents=True, exist_ok=True)
+        Path(f).write_text("services: {}\n")
+
+
+def running(c):
+    return ResetHost(project_files={name: {f} for name, f in c["projects"].items()},
+                     projects_running=set(c["projects"]))
+
+
+def test_reset_of_owned_host_lists_exactly_its_paths_and_projects(pf, tmp_path):
+    c = reset_cfg(tmp_path)
+    created(c)
+    plan = pf.reset_plan(c, running(c))
+    assert plan["problems"] == []
+    assert sorted(plan["paths"]) == sorted(c["paths"].values())
+    assert plan["projects"] == [{"name": n, "file": f} for n, f in sorted(c["projects"].items())]
+
+
+def test_reset_without_marker_is_refused(pf, tmp_path):
+    c = reset_cfg(tmp_path)
+    created(c)
+    Path(c["marker"]).unlink()
+    plan = pf.reset_plan(c, running(c))
+    assert any("marker" in p for p in plan["problems"])
+
+
+def test_reset_of_another_instance_is_refused(pf, tmp_path):
+    c = reset_cfg(tmp_path)
+    created(c, instance="someone-else")
+    plan = pf.reset_plan(c, running(c))
+    assert any("someone-else" in p for p in plan["problems"])
+
+
+def test_reset_with_other_provision_mode_is_refused(pf, tmp_path):
+    c = reset_cfg(tmp_path)
+    created(c, provision="openstack")
+    plan = pf.reset_plan(c, running(c))
+    assert any("openstack" in p for p in plan["problems"])
+
+
+def test_reset_of_path_not_in_manifest_is_refused(pf, tmp_path):
+    c = reset_cfg(tmp_path)
+    created(c, paths={**c["paths"], "data_root": str(tmp_path / "srv" / "other")})
+    plan = pf.reset_plan(c, running(c))
+    assert any("data_root" in p and "manifest" in p for p in plan["problems"])
+
+
+def test_reset_of_shared_dataset_is_refused(pf, tmp_path):
+    c = reset_cfg(tmp_path, shared=[str(tmp_path / "srv" / "data" / "ref")])
+    created(c)
+    plan = pf.reset_plan(c, running(c))
+    assert any("data_root" in p and "shared" in p for p in plan["problems"])
+
+
+def test_reset_of_path_holding_a_mount_is_refused(pf, tmp_path):
+    c = reset_cfg(tmp_path)
+    created(c)
+    host = running(c)
+    host.mount_points.append(str(tmp_path / "srv" / "data" / "share"))
+    plan = pf.reset_plan(c, host)
+    assert any("data_root" in p and "mount" in p for p in plan["problems"])
+
+
+def test_reset_of_path_in_docker_root_is_refused(pf, tmp_path):
+    c = reset_cfg(tmp_path)
+    created(c)
+    host = running(c)
+    host.docker_root_dir = str(tmp_path / "srv")
+    plan = pf.reset_plan(c, host)
+    assert any("Docker" in p for p in plan["problems"])
+
+
+@pytest.mark.parametrize("bad", ["/", "/home/ubuntu", "relative"])
+def test_reset_of_unsafe_path_is_refused_even_if_recorded(pf, tmp_path, bad):
+    c = reset_cfg(tmp_path)
+    created(c)
+    c["paths"]["data_root"] = bad
+    Path(c["manifest"]).write_text(json.dumps({
+        "instance": "dev-local", "provision": "existing", "paths": c["paths"],
+        "compose_projects": sorted(c["projects"])}))
+    plan = pf.reset_plan(c, running(c))
+    assert any("data_root" in p for p in plan["problems"])
+
+
+def test_reset_of_symlinked_path_is_refused(pf, tmp_path):
+    c = reset_cfg(tmp_path)
+    (tmp_path / "elsewhere").mkdir()
+    created(c)
+    Path(c["paths"]["data_root"]).rmdir()
+    Path(c["paths"]["data_root"]).symlink_to(tmp_path / "elsewhere")
+    plan = pf.reset_plan(c, running(c))
+    assert any("data_root" in p and "symlink" in p for p in plan["problems"])
+
+
+def test_reset_of_project_created_from_another_file_is_refused(pf, tmp_path):
+    c = reset_cfg(tmp_path)
+    created(c)
+    host = running(c)
+    host.project_files["spe-frontend"] = {"/opt/other/docker-compose.yml"}
+    plan = pf.reset_plan(c, host)
+    assert any("spe-frontend" in p and "/opt/other" in p for p in plan["problems"])
+
+
+def test_reset_of_project_not_in_manifest_is_refused(pf, tmp_path):
+    c = reset_cfg(tmp_path)
+    created(c, projects=["workflow-stack"])
+    plan = pf.reset_plan(c, running(c))
+    assert any("spe-frontend" in p for p in plan["problems"])
+
+
+def test_reset_with_compose_file_outside_owned_paths_is_refused(pf, tmp_path):
+    c = reset_cfg(tmp_path)
+    created(c)
+    c["projects"]["spe-frontend"] = str(tmp_path / "compose.yml")
+    Path(c["projects"]["spe-frontend"]).write_text("services: {}\n")
+    plan = pf.reset_plan(c, running(c))
+    assert any("spe-frontend" in p and "outside" in p for p in plan["problems"])
+
+
+def test_reset_skips_projects_already_gone(pf, tmp_path):
+    c = reset_cfg(tmp_path)
+    created(c)
+    Path(c["projects"]["spe-frontend"]).unlink()
+    host = ResetHost(project_files={"workflow-stack": {c["projects"]["workflow-stack"]}})
+    plan = pf.reset_plan(c, host)
+    assert plan["problems"] == []
+    assert [p["name"] for p in plan["projects"]] == ["workflow-stack"]
+
+
+def test_reset_of_running_project_without_its_file_is_refused(pf, tmp_path):
+    c = reset_cfg(tmp_path)
+    created(c)
+    Path(c["projects"]["spe-frontend"]).unlink()
+    plan = pf.reset_plan(c, running(c))
+    assert any("spe-frontend" in p and "missing" in p for p in plan["problems"])
+
+
+def test_cli_reset_mode(tmp_path):
+    import base64
+    import subprocess
+    import sys
+    c = reset_cfg(tmp_path)
+    arg = base64.b64encode(json.dumps(c).encode()).decode()
+    out = json.loads(subprocess.run([sys.executable, str(SCRIPT), arg], check=True, capture_output=True, text=True).stdout)
+    assert out["paths"] == [] and any("marker" in p for p in out["problems"])
