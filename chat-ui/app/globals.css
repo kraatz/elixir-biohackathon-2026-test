@@ -1,0 +1,17 @@
+html, body { height: 100%; margin: 0; }
+body { font-family: system-ui, sans-serif; }
+.spe-page { display: flex; flex-direction: column; height: 100vh; }
+.spe-header { padding: 8px 16px; border-bottom: 1px solid #ddd; font-size: 14px; }
+.spe-chat { flex: 1; min-height: 0; }
+.spe-error { padding: 8px 16px; background: #fdecea; color: #611a15; border-bottom: 1px solid #f5c6cb;
+  font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.spe-error button { margin-left: 12px; }
+.spe-tool { margin: 6px 0; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; max-width: 100%; }
+.spe-tool > summary { cursor: pointer; padding: 6px 10px; display: flex; gap: 8px; align-items: baseline; }
+.spe-tool-name { font-weight: 600; font-family: ui-monospace, monospace; }
+.spe-tool-status { font-size: 12px; color: #555; }
+.spe-tool-brief { font-family: ui-monospace, monospace; color: #333; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; min-width: 0; flex: 1; }
+.spe-tool pre { margin: 0; padding: 6px 10px; background: #f6f6f6; border-top: 1px solid #ddd;
+  white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; }
+.spe-tool-label { padding: 4px 10px 0; font-size: 12px; color: #555; border-top: 1px solid #ddd; }

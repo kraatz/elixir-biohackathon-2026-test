@@ -20,7 +20,8 @@ at the first task not marked done.
 | 6 Agent package and config | done, `80b2ae9` | 7 tests |
 | 7 Sandbox tools from OpenAPI | done | Adapter and provenance documented in `agent/README.md`; 50 sandbox tests plus 7 configuration tests pass offline; no paid calls |
 | 8 Agent loop, AG-UI, run log, image | done | 90 offline agent tests (25 service, 15 config, 50 sandbox), also run in the image's `test` stage; image checks against a real open-terminal 0.12.4: 503 unready, 401 without/wrong key, 200 with 16 tools after the sandbox started and again after it restarted, Docker `healthy`, uid 10001, read-only root, `cap_drop ALL`, no keys in the logs. `claude-haiku-5-5` confirmed `active` via the free model-info endpoint; no paid calls |
-| 9–13 | not started | |
+| 9 CopilotKit chat | done | `next build` (type check) passes; headless Chromium against `dev/fake_agent.py` (real agent app, scripted model, fake sandbox): tool cards with arguments and results, second turn, run error in the alert bar; no test key in any of 18 responses or the HTML, no requests to non-local hosts. Same run against the image with a read-only root, uid 1000, `cap_drop ALL`: identical; Docker `healthy` |
+| 10–13 | not started | |
 
 No paid model calls have been made. Each step that makes paid calls still needs the human's OK first.
 
@@ -83,3 +84,8 @@ response text. Cost: an intentional sandbox-key probe differs from the baseline.
 - Task 8: `limits` and `tools.max_output_bytes` must be positive (`PositiveInt`); four parametrised config tests added to `test_config.py`. Cost: none.
 - Task 8: `create_app(..., retry_delay, max_retry_delay, probe_interval)` keyword arguments beyond the plan's signature, for tests. Cost: none.
 - Task 8: malformed AG-UI bodies get 422 with pydantic errors minus their input (Pydantic AI's `validation_error_response` is private in 2.56). Cost: none.
+- Task 9: route shape is a catch-all `app/api/copilotkit/[[...slug]]/route.ts` with `createCopilotRuntimeHandler({ basePath: "/api/copilotkit" })` (multi-route mode), not the spec's single-file route. Cost: none; the client's `runtimeUrl` is `/api/copilotkit`.
+- Task 9: Next.js `output: "standalone"`, run as `node server.js` instead of `next start`. Cost: the image must copy `.next/static` itself (done in the Dockerfile).
+- Task 9: telemetry disabled (`NEXT_TELEMETRY_DISABLED`, `COPILOTKIT_TELEMETRY_DISABLED`, `DO_NOT_TRACK`): an SPE UI must not phone home. Cost: none.
+- Task 9: TypeScript pinned to 6.0.3 (7.x has no JS API for `next build`'s type check). Cost: none.
+- Task 9: `dev/fake_agent.py` added (not in the plan's file list): the real agent with a scripted model and fake sandbox, used for the UI checks and reusable by Task 10/11. Cost: one dev file.
