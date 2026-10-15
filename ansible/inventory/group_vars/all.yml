@@ -77,3 +77,35 @@ spe_canary_service_info: true      # tokens in WES/DRS/TRS service-info
 # --- workflows --------------------------------------------------------------
 spe_workflows: [wes-drs-smoke, gatk-hc-chr20]
 spe_run_smoke_test: true
+
+# --- frontend (pentest chat UI) ---------------------------------------------
+# A chat frontend runs inside the VM so an operator can drive the LLM agent
+# against this instance's own SPE. OpenWebUI is the only frontend today; set
+# spe_frontend to something else (and add a matching role) to swap it out, or
+# to "" / "none" to deploy no frontend.
+spe_frontend: openwebui
+spe_frontend_dir: "/home/{{ spe_ssh_user }}/spe-frontend"
+spe_frontend_webui_image: ghcr.io/open-webui/open-webui:v0.11.3
+spe_frontend_terminal_image: spe-open-terminal:0.12.4
+spe_webui_local_port: 8080          # bound to 127.0.0.1 on the VM; reach it over an SSH tunnel
+
+# LLM backend for the frontend. Reuses the de.NBI endpoint. The key is NOT
+# stored in the repo: it is read from the DENBI_LLM_API_KEY environment
+# variable on the controller (or pass -e spe_denbi_api_key=...).
+spe_llm_base_url: https://denbi-llm-api-internal.bihealth.org/v1
+spe_denbi_api_key: "{{ lookup('ansible.builtin.env', 'DENBI_LLM_API_KEY') }}"
+
+# Per-instance secrets, derived from the seed so re-runs are idempotent.
+spe_webui_secret_key: "{{ (spe_seed | string ~ ':webui-secret') | hash('sha256') }}"
+spe_terminal_api_key: "{{ (spe_seed | string ~ ':terminal-api') | hash('sha256') }}"
+
+# Frontend admin + agent system prompt. The admin account is pre-created via the
+# OpenWebUI API so the agent system prompt can be attached to the model
+# automatically (a system prompt is otherwise a per-user setting). Password is
+# derived from the seed, so it is reproducible and unique per instance.
+spe_webui_admin_name: "SPE operator"
+spe_webui_admin_email: "admin@{{ spe_instance }}.spe.local"
+spe_webui_admin_password: "{{ ((spe_seed | string ~ ':webui-admin') | hash('sha256'))[:20] }}"
+# The model id OpenWebUI serves from the de.NBI endpoint; the system prompt is
+# attached to it so every chat gets it by default.
+spe_webui_model_id: qwen3.8-27b

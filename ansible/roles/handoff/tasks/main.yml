@@ -87,6 +87,13 @@
       drs: https://{{ spe_api_host }}/ga4gh/drs/v1
       trs: https://{{ spe_api_host }}/ga4gh/trs/v2
       weskit_image: {{ spe_weskit_image }}
+      {% if spe_frontend == 'openwebui' %}
+      frontend: openwebui
+      webui_url: http://127.0.0.1:{{ spe_webui_local_port }}
+      webui_tunnel: ssh -i {{ spe_output_dir }}/ssh_key -L {{ spe_webui_local_port }}:127.0.0.1:{{ spe_webui_local_port }} {{ spe_ssh_user }}@{{ spe_floating_ip | default(spe_api_host) }}
+      webui_admin_user: {{ spe_webui_admin_email }}
+      webui_admin_password: {{ spe_webui_admin_password }}
+      {% endif %}
     dest: "{{ spe_output_dir }}/hosts.yml"
     mode: "0600"
   delegate_to: localhost
