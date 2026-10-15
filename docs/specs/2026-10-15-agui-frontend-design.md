@@ -15,7 +15,8 @@ endpoint, so promptfoo (and later other agents) can test it without a UI.
 Selected per instance with `spe_frontend: agui`. `spe_frontend: openwebui`
 keeps working unchanged in behaviour.
 
-First deployment target: **one SPE on one VM that already exists**. VM
+First deployment target: **one SPE on one VM that already exists** — first
+this development VM (§7.1), then a de.NBI VM once SSH access is back. VM
 creation by the playbooks is skipped for now (we may not have the
 OpenStack rights to create VMs); §7.0 adds the mode that configures an
 existing VM. Several SPEs are deferred to sub-project 2.
@@ -133,9 +134,18 @@ Served by uvicorn on port 8100 in the container.
 
 ### Model
 
-Pydantic AI's OpenAI-compatible model with `base_url = spe_llm_base_url`,
-model `spe_agent_model` (default `spe_webui_model_id`, `qwen3.8-27b`), key
-from `agent.env` (`OPENAI_API_KEY`), which only this container receives.
+Two providers, chosen in `agent.yaml` (`model.provider`):
+
+- `openai_compatible` (default, used on de.NBI): Pydantic AI's
+  OpenAI-compatible model with `base_url = spe_llm_base_url`, model
+  `spe_agent_model` (default `spe_webui_model_id`, `qwen3.8-27b`), key
+  `OPENAI_API_KEY`.
+- `anthropic` (local testing, where the de.NBI endpoint is not reachable):
+  Pydantic AI's Anthropic model, key `ANTHROPIC_API_KEY`.
+
+The key comes from `agent.env`, which only this container receives.
+Results from the two providers are not comparable with each other; the
+Open WebUI baseline comparison uses `openai_compatible` on de.NBI.
 
 ### Tools: parity with Open WebUI
 
@@ -204,7 +214,7 @@ redacts the three key values if they occur.
 an error):
 
 ```yaml
-model: { name: qwen3.8-27b, base_url: https://…/v1 }   # key comes from env
+model: { provider: openai_compatible, name: qwen3.8-27b, base_url: https://…/v1 }   # key comes from env
 prompt: { file: /etc/spe-agent/system_prompt.txt, include_sandbox_prompt: true }
 tools:
   surface: shell            # shell | typed (typed: reserved, rejected for now)
@@ -281,6 +291,35 @@ spe_existing_ssh_key: null      # null: let ssh config decide; else a private ke
   `spe-ga4gh-api-2` has it — and SSH to the target (through the de.NBI
   jump host).
 
+### 7.1 First test target: this development VM
+
+The VM this work is developed on (an agentvm microVM: Ubuntu 26.04, 4 vCPU,
+11 GB RAM, Docker 29.8, Ansible with the needed collections; Docker data
+on `/storage/docker`, 39 GB free after pruning) is the first `existing`
+host:
+
+- `spe_existing_host: localhost` with `ansible_connection: local`;
+  `spe_existing_api_ip` = the VM's own non-loopback IP (the certificate
+  needs an IP SAN and the sandbox container must reach Traefik on it).
+- **Passwordless sudo**: needed by `base`, `spe_data`, `workflow_stack`. It
+  did not work here because the image's `ubuntu` user and agentvm's
+  `agentvm` user share uid 1000 and the sudoers rule matched by name only;
+  fixed in the agentvm repo (`4ad5330`, a `#<uid>` rule), effective after
+  the VM is re-provisioned from the host (`vmupdate`).
+- **Dummy dataset**: `/data-share` with the GIAB genomes is not here and
+  would not fit. A generator `dev/make_dummy_dataset.py` writes the layout
+  `spe_data` expects under `spe_source_data_root` — a tiny synthetic
+  reference and four small samples (CRAMs, truth VCFs) named as in
+  `spe_source_samples` — so `spe_seed.py` and canary planting run
+  unchanged. The exact layout is read from `spe_data` and `spe_seed.py`
+  in the plan. Workflows that need real genomes (`gatk-hc-chr20`) are
+  left out of `spe_workflows`; `wes-drs-smoke` is kept.
+- **LLM**: the de.NBI endpoint is internal (no DNS here), so
+  `spe_agent_model_provider: anthropic` with `ANTHROPIC_API_KEY` exported
+  from `~/.config/spe-dev/llm.env` (outside any repository, mode 0600).
+- An example instance file `instances/dev-local.yml` carries these
+  settings (no secrets; the seed is a throwaway dev value).
+
 ### Variables (added to `group_vars/all.yml`)
 
 ```yaml
@@ -288,7 +327,9 @@ spe_frontend: openwebui              # unchanged default; set agui to use this
 spe_agui_ui_port: 3000               # 127.0.0.1 on the VM
 spe_agui_agent_port: 8100            # 127.0.0.1 on the VM
 spe_agui_smoke: true                 # one LLM-backed AG-UI run in the checks
+spe_agent_model_provider: openai_compatible   # openai_compatible | anthropic
 spe_agent_model: "{{ spe_webui_model_id }}"
+spe_agent_llm_key: "{{ spe_denbi_api_key if spe_agent_model_provider == 'openai_compatible' else lookup('ansible.builtin.env', 'ANTHROPIC_API_KEY') }}"
 spe_agent_tool_surface: shell
 spe_agent_sandbox_operations: all
 spe_agent_max_output_bytes: 16384
@@ -422,7 +463,9 @@ two-file app. Exercised end to end by the role's checks and by hand.
 
 Each is recorded back into this spec when settled.
 
-0. On the de.NBI hosts, once SSH access works again: which one is the
+0. Re-provisioning this VM with the agentvm fix gives passwordless sudo
+   (`sudo -n true`).
+1. On the de.NBI hosts, once SSH access works again: which one is the
    controller (`clouds.yaml`, `~/.venv-openstack`, `/data-share`), which
    one hosts the first test SPE, and that it meets §7.0's requirements.
 
