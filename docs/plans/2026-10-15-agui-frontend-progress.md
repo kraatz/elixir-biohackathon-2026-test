@@ -23,7 +23,26 @@ at the first task not marked done.
 | 9 CopilotKit chat | done | `next build` (type check) passes; headless Chromium against `dev/fake_agent.py` (real agent app, scripted model, fake sandbox): tool cards with arguments and results, second turn, run error in the alert bar; no test key in any of 18 responses or the HTML, no requests to non-local hosts. Same run against the image with a read-only root, uid 1000, `cap_drop ALL`: identical; Docker `healthy` |
 | 10 Ansible `agui` role | done except paid checks | 10 smoke-helper tests (`dev/tests`: 50 pass). Dev VM with `anthropic`/`claude-haiku-5-5`, smoke off: create `failed=0`; second converge `failed=0` with no agui/sandbox/compose change and no container restart; `verify.yml` `failed=0` (health, UI, 401 ×2, key boundary through the sandbox API: no agent/LLM key in a command's env, sandbox→agent 401); ports only on 127.0.0.1; `daemon.json` unchanged; `agent_api_key` 0600, no key in `hosts.yml`/`summary.md`. Switched to Open WebUI and back with `--tags frontend`: only the selected stack runs, all three volumes kept. Open WebUI rendering still byte-identical. **Pending human OK (paid):** one smoke run and a two-turn chat |
 | 11 promptfoo client and evals | done except the paid run | promptfoo 0.124.1 `call_api(prompt, options, context)` interface read from its `persistent_wrapper.py`; Python assertions get `(output, context)` with `context.metadata` = provider metadata (from its assertion code). 18 offline tests (provider over synthetic SSE in 1–7-byte chunks, CRLF, multi-line data, UTF-8 splits, RUN_ERROR, truncation, malformed, 401, timeout, history; assertions). Whole suite run with promptfoo against `dev/fake_agent.py`: 3 runs, no errors, assertions evaluated on real metadata (content checks fail by design), no key in the report. **Pending human OK (paid):** the real-model run |
-| 12–13 | not started | |
+| 12 de.NBI deployment | step 1 done (`cc2d835`) | `instances/denbi.example.yml`. Steps 2–5 need the operator: target VM, replacement authorization if it is occupied, SSH through the jump host |
+| 13 Reconcile | spec and docs done (`3a0f0ed`); knowledge record 0005 in the parent repository updated separately | Paid checks and de.NBI remain pending in the acceptance matrix |
+
+## Acceptance evidence (2026-10-15)
+
+| Outcome | State |
+|---|---|
+| Existing-VM lifecycle | met: create, converge, ownership refusal, confirmed reset and re-create, `daemon.json` unchanged |
+| Baseline retained | met: Open WebUI rendering identical; shared sandbox builds; switching both ways keeps volumes |
+| Agent behavior | met: 90 offline agent tests (schema, streaming, history, limits, readiness, logging, cancellation) |
+| Credential boundary | met: 401s, no agent/LLM key in the sandbox env, sandbox→agent 401, no key in browser assets or responses, 0600 handoff, redacted logs |
+| User experience | met with the scripted agent (UI build, tool cards, streamed answer, second turn, visible errors); **pending** with the real model (paid) |
+| Evaluation | offline tests and a scripted-agent run met; **pending** real-model suite (paid) |
+| Deployment | dev VM met; **pending** de.NBI (operator) |
+| Reproducibility | met: locks (`uv.lock` ×2, `package-lock.json` ×2), examples, docs, source commits recorded, no secrets staged |
+
+Final review: self-review of the whole branch (this session spawns no subagents unless asked); no Critical or Important findings. Deferred minors:
+- `dev/tests/__pycache__/` is not ignored by git (shows as untracked).
+- After readiness, a sandbox outage is noticed within the 30 s probe interval; runs in that window get tool errors rather than 503.
+- `spe_data`, `drs_register`, `trs_install` and handoff tasks still report `changed` on every converge (pre-existing).
 
 No paid model calls have been made. Each step that makes paid calls still needs the human's OK first.
 
