@@ -15,10 +15,16 @@ endpoint, so promptfoo (and later other agents) can test it without a UI.
 Selected per instance with `spe_frontend: agui`. `spe_frontend: openwebui`
 keeps working unchanged in behaviour.
 
+First deployment target: **one SPE on one VM that already exists**. VM
+creation by the playbooks is skipped for now (we may not have the
+OpenStack rights to create VMs); §7.0 adds the mode that configures an
+existing VM. Several SPEs are deferred to sub-project 2.
+
 Success means:
 
-1. `create.yml` with `spe_frontend: agui` brings up sandbox, agent and chat
-   on the SPE VM, idempotently.
+1. `create.yml` with `spe_provision: existing` and `spe_frontend: agui`
+   configures an existing VM end to end — SPE stack, sandbox, agent and
+   chat — idempotently.
 2. Its checks pass: health, the LLM-key boundary, and one smoke run over
    AG-UI.
 3. An operator chats with the agent through an SSH tunnel and sees each
@@ -28,7 +34,9 @@ Success means:
 
 ## 2. Non-goals
 
-Server-side sessions, user authentication, push, public exposure, scenario
+Creating VMs (the `openstack` provisioning path is left as it is, not
+used or tested here), more than one SPE, server-side sessions, user
+authentication, push, public exposure, scenario
 profiles and fleets (sub-project 2), the portal and flags (sub-project 3),
 red/blue agents (deferred), typed GA4GH tools (the `typed` tool surface is
 reserved in config, not built), sandbox egress restriction (today's
@@ -231,6 +239,48 @@ as AG-UI defines; the agent keeps no session state. Accepted for #1 (0002,
 
 ## 7. Ansible
 
+### 7.0 Provisioning an existing VM (`spe_provision: existing`)
+
+Today `create.yml`'s first play (`os_provision`, on the controller) creates
+keypair, security group, server and floating IP in OpenStack and registers
+the new VM with `add_host`; the second play configures it. Nothing else
+needs OpenStack. So the change is confined to how the host gets into the
+inventory:
+
+```yaml
+spe_provision: openstack        # openstack (create the VM, as today) | existing
+spe_existing_host: null         # SSH target: an alias from ~/.ssh/config (jump host included) or an address
+spe_existing_api_ip: null       # the VM's private IP; becomes spe_api_host (certificate IP SAN, API URLs)
+spe_existing_ssh_key: null      # null: let ssh config decide; else a private key path on the controller
+```
+
+- **Play 1** in `existing` mode skips `os_provision` and instead asserts the
+  three variables, creates `output/<instance>/`, and `add_host`s
+  `spe_existing_host` with `spe_api_host: spe_existing_api_ip` and
+  `spe_floating_ip: ''`. `spe_api_host` must be an IP: `workflow_stack`
+  puts it in the certificate as `IP:` SAN.
+- **Ownership marker**: `base` writes `/etc/spe-instance` with the instance
+  name; play 2 refuses to run on a host whose marker names a different
+  instance, so two instance files cannot overwrite one VM.
+- **Host requirements** (asserted at the start of play 2): passwordless
+  `sudo`, Ubuntu with `apt`, free disk at `spe_data_root` for the selected
+  samples. `base` installs Docker as today.
+- **Security group**: not managed in this mode; whoever owns the VM
+  controls ports 22 and 443. `summary.md` says so.
+- **Handoff and `verify.yml`**: `hosts.yml` records `provision`, the SSH
+  target and key, and `verify.yml` connects with those instead of
+  assuming `output/<instance>/ssh_key`.
+- **`destroy.yml`** never deletes a VM it did not create. In `existing`
+  mode it *resets* instead: `docker compose down -v` for `spe-frontend` and
+  the workflow stack, then removes `spe_stack_dir`, `spe_frontend_dir`,
+  the instance's data under `spe_data_root` and `/etc/spe-instance`. It
+  requires `-e spe_confirm_reset=<instance>` and checks the ownership
+  marker first. This is also the reset story 0005 asks for.
+- **Controller**: wherever `ansible-playbook` runs needs the base dataset
+  at `spe_source_data_root` (rsynced to the VM) — today only
+  `spe-ga4gh-api-2` has it — and SSH to the target (through the de.NBI
+  jump host).
+
 ### Variables (added to `group_vars/all.yml`)
 
 ```yaml
@@ -371,6 +421,10 @@ two-file app. Exercised end to end by the role's checks and by hand.
 ## 11. Things to verify during implementation
 
 Each is recorded back into this spec when settled.
+
+0. On the de.NBI hosts, once SSH access works again: which one is the
+   controller (`clouds.yaml`, `~/.venv-openstack`, `/data-share`), which
+   one hosts the first test SPE, and that it meets §7.0's requirements.
 
 1. Open WebUI's combination of model system prompt and terminal `/system`
    prompt (§5 *Prompt*).
