@@ -16,7 +16,7 @@ at the first task not marked done.
 | 2 Dummy dataset | done, `9d45036` | 5 tests; dataset in `/home/agentvm/spe-dummy-data` (seed 1, 1.4 MB) |
 | 3 SPE stack on the dev VM | done | full `create.yml`: `failed=0`, smoke `COMPLETE`; WES/TRS/DRS all `200` with `output/dev-local/ca.crt`. Re-run `changed` in `Whole stack up` was the one-shot `weskit-data-init` container being started again; fixed in `d62ef54` (stack re-run `changed=0`). `verify.yml` alone: `failed=0`, smoke `COMPLETE`. README note added |
 | 4 Reset instead of delete | done | 18 reset-plan tests (35 preflight tests total); refused without confirmation, with mismatched `spe_provision`, with a path not in the manifest, with a mismatched instance (all `failed=1`, stack untouched); confirmed reset `failed=0`: marker, manifest, three directories, CA anchor, containers and project volumes gone, while `daemon.json`, other containers/volumes, images, the dummy dataset and `output/dev-local` were unchanged; re-create `failed=0`, smoke `COMPLETE` |
-| 5 Shared `sandbox` role | not started | |
+| 5 Shared `sandbox` role | done | Open WebUI templates render identically before/after (`diff -r` → SAME); `create.yml` syntax check clean. First real build of the role on the VM happens in Task 10 |
 | 6 Agent package and config | done, `80b2ae9` | 7 tests |
 | 7 Sandbox tools from OpenAPI | done | Adapter and provenance documented in `agent/README.md`; 50 sandbox tests plus 7 configuration tests pass offline; no paid calls |
 | 8–13 | not started | |
