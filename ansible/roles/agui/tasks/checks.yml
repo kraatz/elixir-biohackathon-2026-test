@@ -1,0 +1,104 @@
+---
+# Checks of the AG-UI frontend. Included at the end of this role (no model call) and by
+# the verify role, in create.yml and verify.yml, which adds the smoke run when
+# spe_agui_smoke is set: one paid model call per run.
+- name: Agent answers its health check
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ spe_agui_agent_port }}/healthz"
+    status_code: 200
+  register: agui_health
+  until: agui_health.status == 200
+  retries: 40
+  delay: 3
+
+- name: Chat UI answers
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ spe_agui_ui_port }}/"
+    status_code: 200
+  register: agui_ui
+  until: agui_ui.status == 200
+  retries: 20
+  delay: 3
+
+- name: Agent refuses a request without or with a wrong bearer key
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ spe_agui_agent_port }}/agent"
+    method: POST
+    body_format: json
+    body: {}
+    headers: "{{ item }}"
+    status_code: 401
+  loop:
+    - {}
+    - { Authorization: "Bearer not-the-agent-key" }
+  loop_control:
+    label: "{{ 'no key' if item == {} else 'wrong key' }}"
+
+- name: LLM key as the agent holds it (for the comparison below)
+  ansible.builtin.slurp:
+    src: "{{ spe_frontend_dir }}/agent.env"
+  register: agui_agent_env
+  no_log: true
+
+- name: Keys the sandbox must never see
+  ansible.builtin.set_fact:
+    agui_forbidden_keys:
+      - "{{ spe_agent_api_key }}"
+      - >-
+        {{ (agui_agent_env.content | b64decode).splitlines()
+           | select('match', '^(ANTHROPIC|OPENAI)_API_KEY=') | first | regex_replace('^[A-Z_]+=', '') }}
+  no_log: true
+
+- name: What a command in the sandbox sees, asked through the sandbox API
+  ansible.builtin.command:
+    argv: [docker, compose, -p, spe-frontend, -f, "{{ spe_frontend_dir }}/docker-compose.yml",
+           exec, -T, agent, python, -]
+    stdin: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../roles/agui/files/agui_probe.py') }}"
+  register: agui_probe
+  changed_when: false
+  no_log: true   # the output holds the sandbox's own key (a known, documented gap)
+
+- name: The sandbox's environment has neither the agent key nor the LLM key
+  ansible.builtin.assert:
+    that:
+      - "'PATH=' in agui_probe.stdout"
+      - agui_forbidden_keys | map('trim') | reject('equalto', '') | list | length == 2
+      - agui_forbidden_keys | select('in', agui_probe.stdout) | list | length == 0
+    fail_msg: "key boundary broken (or the probe produced no environment); see agui_probe.py"
+    quiet: true
+
+- name: The sandbox cannot use the agent without its key
+  ansible.builtin.assert:
+    that: "'AGENT_STATUS=401' in agui_probe.stdout"
+    fail_msg: "an unauthenticated request from the sandbox to the agent did not get 401"
+    quiet: true
+
+- name: Smoke helper
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../roles/agui/files/agui_smoke.py"
+    dest: /opt/spe/bin/agui_smoke.py
+    mode: "0755"
+  when: spe_agui_smoke | bool and agui_run_smoke | default(true)
+
+- name: Smoke run over AG-UI (one paid model call)
+  ansible.builtin.command:
+    argv: [/usr/bin/python3, /opt/spe/bin/agui_smoke.py, --url, "http://127.0.0.1:{{ spe_agui_agent_port }}/agent"]
+  environment:
+    SPE_AGENT_API_KEY: "{{ spe_agent_api_key }}"
+  register: agui_smoke
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when: spe_agui_smoke | bool and agui_run_smoke | default(true)
+
+- name: Smoke result
+  ansible.builtin.debug:
+    msg: "{{ agui_smoke.stdout | default('') }} {{ agui_smoke.stderr | default('') }}"
+  when: spe_agui_smoke | bool and agui_run_smoke | default(true)
+
+- name: Smoke passed
+  ansible.builtin.assert:
+    that: agui_smoke.rc == 0
+    fail_msg: "the AG-UI smoke run failed; see the result above"
+    quiet: true
+  when: spe_agui_smoke | bool and agui_run_smoke | default(true)

@@ -115,8 +115,25 @@
           'webui_admin_user': spe_webui_admin_email,
           'webui_admin_password': spe_webui_admin_password}
          if spe_frontend == 'openwebui' else {} }}
-    spe_handoff: "{{ spe_handoff_common | combine(spe_handoff_ssh, spe_handoff_frontend) }}"
+    spe_handoff_agui: >-
+      {{ {'ui_url': 'http://127.0.0.1:' ~ spe_agui_ui_port,
+          'agent_url': 'http://127.0.0.1:' ~ spe_agui_agent_port ~ '/agent',
+          'agui_tunnel': (spe_ssh_prefix ~ ' -N -L ' ~ spe_agui_ui_port ~ ':127.0.0.1:' ~ spe_agui_ui_port
+                          ~ ' -L ' ~ spe_agui_agent_port ~ ':127.0.0.1:' ~ spe_agui_agent_port) if spe_ssh_prefix else '',
+          'agent_api_key_file': spe_output_dir ~ '/agent_api_key',
+          'agent_model': spe_agent_model_provider ~ ':' ~ spe_agent_model}
+         if spe_frontend == 'agui' else {} }}
+    spe_handoff: "{{ spe_handoff_common | combine(spe_handoff_ssh, spe_handoff_frontend, spe_handoff_agui) }}"
   delegate_to: localhost
+
+- name: Agent bearer key (controller only; promptfoo and the smoke run read it)
+  ansible.builtin.copy:
+    content: "{{ spe_agent_api_key }}\n"
+    dest: "{{ spe_output_dir }}/agent_api_key"
+    mode: "0600"
+  delegate_to: localhost
+  no_log: true
+  when: spe_frontend == 'agui'
 
 - name: Summary
   ansible.builtin.template:

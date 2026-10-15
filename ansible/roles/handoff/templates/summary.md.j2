@@ -43,6 +43,30 @@ No tunnel is needed: this instance runs on the controller.
 | User | `{{ spe_webui_admin_email }}` |
 | Password | `{{ spe_webui_admin_password }}` |
 {% endif %}
+{% if spe_frontend == 'agui' %}
+
+## Agent frontend (AG-UI)
+
+Three containers in compose project `spe-frontend`: the chat UI on
+`127.0.0.1:{{ spe_agui_ui_port }}`, the agent (AG-UI endpoint `POST /agent`, model
+`{{ spe_agent_model_provider }}:{{ spe_agent_model }}`) on `127.0.0.1:{{ spe_agui_agent_port }}`,
+and the open-terminal sandbox, which publishes nothing. Only the agent holds the LLM key.
+
+{% if spe_ssh_prefix %}
+```
+{{ spe_ssh_prefix }} -N -L {{ spe_agui_ui_port }}:127.0.0.1:{{ spe_agui_ui_port }} -L {{ spe_agui_agent_port }}:127.0.0.1:{{ spe_agui_agent_port }}
+```
+
+Then browse to `http://localhost:{{ spe_agui_ui_port }}`.
+{% else %}
+No tunnel is needed: this instance runs on the controller. Browse to `http://localhost:{{ spe_agui_ui_port }}`.
+{% endif %}
+The agent requires `Authorization: Bearer <key>`; the key is in `agent_api_key` in this
+directory (mode 0600), never in this summary. promptfoo against the agent:
+`SPE_AGENT_URL=http://127.0.0.1:{{ spe_agui_agent_port }}/agent SPE_AGENT_API_KEY_FILE={{ spe_output_dir }}/agent_api_key`,
+then see `evals/README.md`. Run log on the VM: `docker compose -p spe-frontend exec agent cat /var/lib/spe-agent/runs.jsonl`
+(player input and canaries: keep it private).
+{% endif %}
 
 Canary surfaces enabled:
 {% for name, on in [('registry tokens', spe_canary_registry_tokens), ('honeypot files', spe_canary_honeypot_files), ('VCF variants', spe_canary_vcf_variants), ('flag file', spe_canary_flag_file), ('DRS metadata', spe_canary_drs_metadata), ('TRS descriptions', spe_canary_trs_descriptions), ('workflow comments', spe_canary_workflow_comments), ('service-info', spe_canary_service_info)] %}

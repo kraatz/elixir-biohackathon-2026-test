@@ -45,6 +45,8 @@
     project_src: "{{ spe_frontend_dir }}"
     files: [docker-compose.yml]
     state: present
+    # Same project as the agui role: switching frontends removes the other's containers.
+    remove_orphans: true
     recreate: "{{ 'always' if (rendered.changed or sandbox_image_changed) else 'auto' }}"
 
 - name: Wait for OpenWebUI to answer

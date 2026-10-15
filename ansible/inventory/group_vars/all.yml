@@ -36,7 +36,7 @@ spe_manage_docker: true       # false: Docker belongs to someone else on this ho
 spe_compose_projects: [workflow-stack, spe-frontend]
 spe_frontend_ports: >-
   {{ {'openwebui': [spe_webui_local_port],
-      'agui': [spe_agui_ui_port | default(3000), spe_agui_agent_port | default(8100)]}.get(spe_frontend, []) }}
+      'agui': [spe_agui_ui_port, spe_agui_agent_port]}.get(spe_frontend, []) }}
 spe_owned_ports: >-
   {{ dict([['443', 'workflow-stack']] + (spe_frontend_ports | map('string') | product(['spe-frontend']) | list)) }}
 
@@ -99,9 +99,9 @@ spe_run_smoke_test: true
 
 # --- frontend (pentest chat UI) ---------------------------------------------
 # A chat frontend runs inside the VM so an operator can drive the LLM agent
-# against this instance's own SPE. OpenWebUI is the only frontend today; set
-# spe_frontend to something else (and add a matching role) to swap it out, or
-# to "" / "none" to deploy no frontend.
+# against this instance's own SPE: openwebui (Open WebUI runs the agent loop),
+# agui (our own agent over AG-UI with a CopilotKit chat, see below), or none.
+# Both use compose project spe-frontend, so switching replaces one with the other.
 spe_frontend: openwebui
 spe_frontend_dir: "/home/{{ spe_ssh_user }}/spe-frontend"
 spe_frontend_webui_image: ghcr.io/open-webui/open-webui:v0.11.3
@@ -128,3 +128,29 @@ spe_webui_admin_password: "{{ ((spe_seed | string ~ ':webui-admin') | hash('sha2
 # The model id OpenWebUI serves from the de.NBI endpoint; the system prompt is
 # attached to it so every chat gets it by default.
 spe_webui_model_id: qwen3.8-27b
+
+# --- AG-UI agent frontend (spe_frontend: agui) ------------------------------
+# Three containers in compose project spe-frontend: chat-ui (Next.js + CopilotKit),
+# agent (Pydantic AI over AG-UI; the only holder of the LLM key) and sandbox
+# (the open-terminal image built by role sandbox). Ports bound to 127.0.0.1.
+spe_agui_ui_port: 3000
+spe_agui_agent_port: 8100
+spe_agui_smoke: false                # true: one LLM-backed AG-UI run in the checks (a paid call)
+spe_agui_source_dir: "{{ playbook_dir }}/../.."   # repository root on the controller
+spe_agui_build_dir: "{{ spe_frontend_dir }}/build"
+spe_agent_model_provider: openai_compatible       # openai_compatible (de.NBI) | anthropic (local testing)
+spe_agent_model: "{{ spe_webui_model_id }}"       # anthropic: only claude-haiku-5-5 is accepted
+spe_agent_base_url: "{{ spe_llm_base_url }}"      # openai_compatible only
+# The LLM key never enters the repo: the de.NBI key as for openwebui, or
+# ANTHROPIC_API_KEY from the controller's environment.
+spe_agent_llm_key: >-
+  {{ spe_denbi_api_key if spe_agent_model_provider == 'openai_compatible'
+     else lookup('ansible.builtin.env', 'ANTHROPIC_API_KEY') }}
+spe_agent_tool_surface: shell
+spe_agent_sandbox_operations: all    # or a list of open-terminal operationIds
+spe_agent_include_sandbox_prompt: true
+spe_agent_max_output_bytes: 16384
+spe_agent_request_limit: 50          # per run, not an aggregate budget
+spe_agent_tool_calls_limit: 100
+spe_agent_total_tokens_limit: 400000
+spe_agent_api_key: "{{ (spe_seed | string ~ ':agent-api') | hash('sha256') }}"

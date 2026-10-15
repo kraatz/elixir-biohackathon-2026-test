@@ -9,4 +9,9 @@ spe_existing_api_ip: 100.96.0.2      # this VM's own IP: hostname -I | cut -d' '
 spe_manage_docker: false             # agentvm runs Docker (data-root /storage/docker); leave it alone
 spe_source_data_root: /home/agentvm/spe-dummy-data
 spe_workflows: [wes-drs-smoke]       # gatk-hc-chr20 needs real genomes
-spe_frontend: none                   # Task 10 switches this to agui
+spe_frontend: agui
+# The de.NBI LLM endpoint is internal; here the agent uses Anthropic. Export the key
+# before running: set -a; . ~/.config/spe-dev/llm.env; set +a
+spe_agent_model_provider: anthropic
+spe_agent_model: claude-haiku-5-5    # the only Anthropic model the agent accepts
+spe_agui_smoke: false                # true makes one paid model call per create/verify run

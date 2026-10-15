@@ -104,6 +104,8 @@ from; Docker is never pruned. Built images and `output/<instance>/` are kept.
    bases, then runs OpenWebUI + open-terminal in a `spe-frontend` compose
    project. OpenWebUI is bound to `127.0.0.1:8080` and
    uses the de.NBI LLM endpoint; the operator reaches it over an SSH tunnel.
+   **agui** (only when `spe_frontend == agui`): the same sandbox, our own agent
+   over AG-UI and a CopilotKit chat, in the same compose project (see below).
 8. **handoff**: writes `output/<instance>/` (see below).
 9. **verify**: endpoint checks and a WES smoke run with a DRS input.
 
@@ -158,7 +160,7 @@ workflow files next to it. List every file under `files:` with its TRS
 Each instance runs a chat frontend on the API VM so an operator can drive an LLM
 agent against that instance's own SPE and probe for canary leakage. It is on by
 default (`spe_frontend: openwebui`); set `spe_frontend` to `none` (or any other
-value) to skip it. The role deploys two containers in a `spe-frontend` compose
+value) to skip it, or to `agui` for the agent frontend below. The role deploys two containers in a `spe-frontend` compose
 project under `spe_frontend_dir`:
 
 - **open-webui** — the chat UI, bound to `127.0.0.1:8080` on the VM, using the
@@ -182,8 +184,47 @@ ssh -i output/<instance>/ssh_key -L 8080:127.0.0.1:8080 ubuntu@<floating-ip>
 # then open http://localhost:8080 and create the first account (becomes admin)
 ```
 
+## Agent frontend (AG-UI)
+
+`spe_frontend: agui` runs a Pydantic AI agent we own instead of Open WebUI's
+agent loop (`agent/`, `chat-ui/`, spec `docs/specs/2026-10-15-agui-frontend-design.md`).
+Three containers in compose project `spe-frontend`, so switching `spe_frontend`
+replaces one frontend with the other (its volumes, `open-webui-data` included, stay):
+
+- **chat-ui** — Next.js + CopilotKit on `127.0.0.1:3000`; shows every tool call.
+  Holds only the agent's bearer key, server side.
+- **agent** — `POST /agent` (AG-UI) and `GET /healthz` on `127.0.0.1:8100`. The
+  only holder of the LLM key; requires `Authorization: Bearer <spe_agent_api_key>`.
+  Tools are generated from the sandbox's OpenAPI as Open WebUI does. Per-run
+  limits: 50 model requests, 100 tool calls, 400000 tokens. Run log in volume
+  `agent-runs` (player input and canaries: private).
+- **sandbox** — the open-terminal image from role `sandbox`; publishes nothing.
+
+The role copies only the files git tracks under `agent/` and `chat-ui/` to
+`spe_frontend_dir/build/` and builds `spe-agent:<hash>` and `spe-chat-ui:<hash>`
+from them (the hash covers the build context, so unchanged sources do not
+rebuild). Model: `spe_agent_model_provider: openai_compatible` with the de.NBI
+endpoint and key (as Open WebUI), or `anthropic` with `ANTHROPIC_API_KEY` exported
+on the controller (only `claude-haiku-5-5`).
+
+Checks after deployment and in `verify.yml`, none of which calls the model:
+health, UI, 401 without or with a wrong key, and the key boundary — through the
+sandbox's own API, a command's environment holds neither the agent nor the LLM
+key, and an unauthenticated request from the sandbox to the agent gets 401. With
+`spe_agui_smoke: true`, `verify` (also the last step of `create.yml`) adds one
+real AG-UI run ("List the registered workflows") that must call a tool and finish:
+**a paid model call each time.**
+
+`output/<instance>/agent_api_key` (0600) holds the bearer key; `hosts.yml` has
+`ui_url`, `agent_url` and the tunnel command (`-L 3000:… -L 8100:…`), empty when
+the instance runs on the controller.
+
+Tested on the development VM on 2026-10-15 with `anthropic`/`claude-haiku-5-5`:
+create, a second converge without rebuilds or restarts, `verify.yml`, and switching
+to Open WebUI and back. Model-backed runs pending approval.
+
 ## Not covered yet
 
 - A reverse proxy to reach several instances' frontends at once (planned; for
   now each frontend is localhost-only and reached by its own SSH tunnel).
-- Other frontends behind `spe_frontend` (OpenWebUI is the only option today).
+- The `typed` tool surface for the agent (reserved in its configuration).
