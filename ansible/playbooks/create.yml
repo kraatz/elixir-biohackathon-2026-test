@@ -10,9 +10,11 @@
         that:
           - spe_instance is string and spe_instance | length > 0
           - spe_seed is not none
-        fail_msg: "set spe_instance and spe_seed (pass -e @instances/<name>.yml)"
+          - spe_provision in ['openstack', 'existing']
+        fail_msg: "set spe_instance and spe_seed (pass -e @instances/<name>.yml); spe_provision is openstack or existing"
   roles:
-    - { role: os_provision, tags: [always] }
+    - { role: os_provision, tags: [always], when: spe_provision == 'openstack' }
+    - { role: existing_host, tags: [always], when: spe_provision == 'existing' }
 
 - name: Configure the API instance
   hosts: spe_api
@@ -32,6 +34,42 @@
       ansible.builtin.command: cloud-init status --wait
       changed_when: false
       failed_when: false
+    - name: Existing host is fit and free for this instance
+      tags: [always]
+      when: spe_provision == 'existing'
+      block:
+        - name: Passwordless sudo
+          ansible.builtin.command: sudo -n true
+          changed_when: false
+        - name: Ownership, paths, ports, compose projects and disk
+          # Read-only; see the script header for the rules.
+          ansible.builtin.script:
+            cmd: >-
+              {{ playbook_dir }}/../roles/existing_host/files/spe_preflight.py
+              {{ spe_preflight_cfg | to_json | b64encode }}
+            executable: python3
+          vars:
+            spe_preflight_cfg:
+              instance: "{{ spe_instance }}"
+              provision: "{{ spe_provision }}"
+              marker: /etc/spe-instance
+              manifest: /etc/spe-instance.json
+              paths:
+                stack_dir: "{{ spe_stack_dir }}"
+                frontend_dir: "{{ spe_frontend_dir }}"
+                data_root: "{{ spe_data_root }}"
+              ports: "{{ spe_owned_ports }}"
+              projects: "{{ spe_compose_projects }}"
+              min_free_gb: "{{ spe_min_free_gb | int }}"
+          register: spe_preflight_run
+          changed_when: false
+        - name: Preflight result
+          ansible.builtin.set_fact:
+            spe_preflight: "{{ spe_preflight_run.stdout | from_json }}"
+        - name: Refuse a host that is not free for this instance
+          ansible.builtin.assert:
+            that: spe_preflight.problems | length == 0
+            fail_msg: "{{ inventory_hostname }} refused, nothing changed: {{ spe_preflight.problems | join('; ') }}"
     - name: Deterministic service-info tokens
       tags: [always]
       ansible.builtin.set_fact:

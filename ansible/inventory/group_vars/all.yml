@@ -21,6 +21,25 @@ spe_extra_authorized_keys: [] # public keys added to the ubuntu user besides the
 spe_ssh_user: ubuntu
 spe_connect_via: private      # private | floating: which address the controller uses for SSH
 
+# --- provisioning -------------------------------------------------------------
+# openstack: create the VM (keypair, security group, server, floating IP).
+# existing:  configure a VM that already exists; nothing in OpenStack is touched.
+spe_provision: openstack
+spe_existing_host: null       # existing: SSH target (alias from ~/.ssh/config or address), or localhost
+spe_existing_api_ip: null     # existing: the VM's own IP; becomes spe_api_host (certificate IP SAN)
+spe_existing_ssh_key: null    # existing: private key on the controller; null lets the ssh config decide
+spe_existing_ssh_args: ""     # existing: extra ssh args, e.g. "-F /home/agentvm/.ssh/config"
+spe_min_free_gb: 15           # existing: refuse a host with less free disk (data and Docker filesystems)
+spe_manage_docker: true       # false: Docker belongs to someone else on this host; base leaves it alone
+# What this instance occupies on a host: checked before an existing host is
+# configured, recorded in /etc/spe-instance.json, and the only things destroy.yml resets.
+spe_compose_projects: [workflow-stack, spe-frontend]
+spe_frontend_ports: >-
+  {{ {'openwebui': [spe_webui_local_port],
+      'agui': [spe_agui_ui_port | default(3000), spe_agui_agent_port | default(8100)]}.get(spe_frontend, []) }}
+spe_owned_ports: >-
+  {{ dict([['443', 'workflow-stack']] + (spe_frontend_ports | map('string') | product(['spe-frontend']) | list)) }}
+
 # --- controller-side paths ---------------------------------------------------
 spe_output_root: "{{ playbook_dir }}/../output"
 spe_output_dir: "{{ spe_output_root }}/{{ spe_instance }}"

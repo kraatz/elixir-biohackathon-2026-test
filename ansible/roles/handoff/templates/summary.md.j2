@@ -13,7 +13,12 @@
 | Canary tokens | {{ spe_canary_record.tokens | length }} |
 
 Endpoints: `https://{{ spe_api_host }}/ga4gh/wes/v1`, `/ga4gh/drs/v1`, `/ga4gh/trs/v2`.
-Trust anchor: `ca.crt` in this directory. SSH: `ssh -i ssh_key {{ spe_ssh_user }}@{{ spe_floating_ip | default(spe_api_host) }}`.
+Trust anchor: `ca.crt` in this directory. SSH: {{ ('`' ~ spe_ssh_prefix ~ '`') if spe_ssh_prefix else 'not needed, this instance runs on the controller' }}.
+{% if spe_provision == 'existing' %}
+
+This instance runs on an existing VM (`{{ spe_existing_host }}`). Its security group is not managed by
+these playbooks: whoever owns the VM controls who reaches ports 22 and 443.
+{% endif %}
 {% if spe_frontend == 'openwebui' %}
 
 ## Pentest frontend (OpenWebUI)
@@ -24,9 +29,13 @@ backend is `{{ spe_llm_base_url }}`. The agent system prompt is attached to the
 model, so every chat gets it. Open a tunnel, then browse to
 `http://localhost:{{ spe_webui_local_port }}` and log in with the admin account below:
 
+{% if spe_ssh_prefix %}
 ```
-ssh -i ssh_key -L {{ spe_webui_local_port }}:127.0.0.1:{{ spe_webui_local_port }} {{ spe_ssh_user }}@{{ spe_floating_ip | default(spe_api_host) }}
+{{ spe_ssh_prefix }} -N -L {{ spe_webui_local_port }}:127.0.0.1:{{ spe_webui_local_port }}
 ```
+{% else %}
+No tunnel is needed: this instance runs on the controller.
+{% endif %}
 
 | Admin login | Value |
 |---|---|

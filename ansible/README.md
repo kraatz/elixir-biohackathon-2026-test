@@ -34,6 +34,35 @@ changes nothing when nothing differs. Use `--tags stack`, `--tags trs` etc.
 to run a single stage against an existing instance (the provisioning play
 still runs first to find the host).
 
+Real instance files carry the seed, which reproduces every canary: the
+repository ignores `instances/*.yml` except `example.yml` and
+`*.example.yml`.
+
+### Configuring an existing VM
+
+When VMs cannot or should not be created, set `spe_provision: existing` and
+name the VM: `spe_existing_host` (an alias from `~/.ssh/config`, or
+`localhost` for the controller itself) and `spe_existing_api_ip` (the VM's
+own IPv4 address, used in the certificate). Optional: `spe_existing_ssh_key`
+and `spe_existing_ssh_args` (for example `-F ~/.ssh/config` to go through a
+jump host; rsync uses them too). OpenStack is not touched.
+
+Before anything changes, a read-only preflight
+(`roles/existing_host/files/spe_preflight.py`) checks passwordless sudo and
+refuses the host when it is not free for this instance: `/etc/spe-instance`
+names another instance; `spe_stack_dir`, `spe_frontend_dir` or
+`spe_data_root` already exist, are symlinks, are unsafe (`/`, a home
+directory) or overlap Docker's data root; port 443 or a frontend port is
+taken by something other than this instance's compose project; a
+`workflow-stack` or `spe-frontend` compose project already has containers;
+or the data or Docker filesystem has less than `spe_min_free_gb` free. On
+a host this instance already owns, everything must match the ownership
+manifest `/etc/spe-instance.json` written by the first run (resolved paths
+and compose projects): the marker alone excuses nothing. Set
+`spe_manage_docker: false` when Docker on the host is managed by something
+else; `base` then leaves its packages, `daemon.json` and service alone.
+`instances/dev-local.example.yml` configures the development VM itself.
+
 ## What create.yml does
 
 1. **os_provision** (controller): keypair `<instance>-key` (private key saved

@@ -1,0 +1,12 @@
+# The development VM configures itself. Copy to dev-local.yml (ignored by the
+# repository, mode 0600) and set spe_seed. Generate the dummy dataset first
+# (dev/make_dummy_dataset.py).
+spe_instance: dev-local
+spe_seed: null                       # set a throwaway integer in your copy
+spe_provision: existing
+spe_existing_host: localhost
+spe_existing_api_ip: 100.96.0.2      # this VM's own IP: hostname -I | cut -d' ' -f1
+spe_manage_docker: false             # agentvm runs Docker (data-root /storage/docker); leave it alone
+spe_source_data_root: /home/agentvm/spe-dummy-data
+spe_workflows: [wes-drs-smoke]       # gatk-hc-chr20 needs real genomes
+spe_frontend: none                   # Task 10 switches this to agui

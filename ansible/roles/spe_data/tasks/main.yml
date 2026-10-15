@@ -20,6 +20,7 @@
 
 - name: Reference tier from controller
   ansible.posix.synchronize:
+    use_ssh_args: true
     src: "{{ spe_source_data_root }}/ref/"
     dest: "{{ spe_data_root }}/ref/"
     archive: false
@@ -49,6 +50,7 @@
 
 - name: Stage missing samples from controller
   ansible.posix.synchronize:
+    use_ssh_args: true
     src: "{{ spe_source_data_root }}/{{ spe_source_samples[item.item] }}/"
     dest: "{{ spe_data_root }}/.staging/{{ item.item }}/"
     archive: false

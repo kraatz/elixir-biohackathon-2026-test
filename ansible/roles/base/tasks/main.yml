@@ -1,9 +1,28 @@
 ---
 # Baseline for an SPE API instance: packages, Docker, data directory.
+- name: Instance ownership marker
+  ansible.builtin.copy:
+    content: "{{ spe_instance }}\n"
+    dest: /etc/spe-instance
+    mode: "0644"
+
+- name: Ownership manifest (what destroy.yml may reset)
+  ansible.builtin.copy:
+    content: "{{ spe_manifest | to_nice_json }}\n"
+    dest: /etc/spe-instance.json
+    mode: "0644"
+  vars:
+    spe_manifest:
+      instance: "{{ spe_instance }}"
+      provision: "{{ spe_provision }}"
+      paths: "{{ (spe_preflight | default({})).resolved | default({'stack_dir': spe_stack_dir, 'frontend_dir': spe_frontend_dir, 'data_root': spe_data_root}, true) }}"
+      compose_projects: "{{ spe_compose_projects }}"
+
 - name: Detect existing Docker apt source
   ansible.builtin.shell: grep -rls download.docker.com /etc/apt/sources.list.d || true
   changed_when: false
   register: docker_source
+  when: spe_manage_docker
 
 - name: Add Docker apt repository
   ansible.builtin.deb822_repository:
@@ -13,26 +32,21 @@
     suites: "{{ ansible_distribution_release }}"
     components: stable
     signed_by: https://download.docker.com/linux/ubuntu/gpg
-  when: docker_source.stdout | trim | length == 0
+  when:
+    - spe_manage_docker
+    - docker_source.stdout | trim | length == 0
+
+- name: Install Docker packages
+  ansible.builtin.apt:
+    name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin, docker-compose-plugin]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: spe_manage_docker
 
 - name: Install packages
   ansible.builtin.apt:
-    name:
-      - docker-ce
-      - docker-ce-cli
-      - containerd.io
-      - docker-buildx-plugin
-      - docker-compose-plugin
-      - git
-      - curl
-      - rsync
-      - ca-certificates
-      - python3-yaml
-      - python3-docker
-      - samtools
-      - bcftools
-      - tabix
-      - age
+    name: [git, curl, rsync, ca-certificates, python3-yaml, python3-docker, samtools, bcftools, tabix, age]
     state: present
     update_cache: true
     cache_valid_time: 3600
@@ -43,24 +57,33 @@
     dest: /etc/docker/daemon.json
     mode: "0644"
   notify: Restart docker
+  when: spe_manage_docker
 
 - name: Docker enabled and running
   ansible.builtin.service:
     name: docker
     state: started
     enabled: true
+  when: spe_manage_docker
 
 - name: Deploy user may use Docker
   ansible.builtin.user:
     name: "{{ spe_ssh_user }}"
     groups: docker
     append: true
+  when: spe_manage_docker
 
 - name: Reset connection so the docker group applies
   ansible.builtin.meta: reset_connection
 
 - name: Flush handlers (docker restart before anything uses it)
   ansible.builtin.meta: flush_handlers
+
+- name: Docker answers (managed elsewhere)
+  ansible.builtin.command: docker info --format '{{ "{{" }}.ServerVersion{{ "}}" }}'
+  changed_when: false
+  become: false
+  when: not spe_manage_docker
 
 - name: Directories
   ansible.builtin.file:
