@@ -8,7 +8,9 @@ guide for humans and coding agents working in this repository.
 |---|---|
 | `threats/`, `vocabulary.yaml`, `validate.py` | Threat model catalog (`TM-NNN-*.md`), its controlled vocabulary and validator |
 | `ansible/` | Playbooks that create, verify and destroy one SPE instance (`ansible/README.md`) |
-| `agent/` | Pydantic AI pentest agent served over AG-UI (in progress) |
+| `agent/` | Pydantic AI pentest agent served over AG-UI |
+| `chat-ui/` | Next.js + CopilotKit chat for the agent |
+| `evals/` | promptfoo provider, assertions and starter suite against the agent |
 | `dev/` | Development helpers: dummy dataset generator, tests for host-side scripts |
 | `docs/specs/`, `docs/plans/` | Design specs and implementation plans |
 
@@ -26,6 +28,8 @@ guide for humans and coding agents working in this repository.
 uv run --with pyyaml --with python-frontmatter python validate.py   # threat catalog
 uv run --with pytest pytest dev/tests -q             # dataset generator, host preflight
 (cd agent && uv run --group dev pytest -q)           # agent
+(cd evals && uv run --group dev pytest -q)           # promptfoo provider and assertions
+(cd chat-ui && npm ci && npm run build)              # chat UI (type check)
 cd ansible && ansible-playbook playbooks/create.yml -e @instances/<name>.yml </dev/null
 ```
 
@@ -48,12 +52,12 @@ its cost if wrong, the Open WebUI behaviour to copy, and the local files that
 are not in git. That file is the source of truth for where the work stands.
 Update it as tasks finish, and commit it with the work.
 
-At the handoff:
+State (2026-10-15, second session):
 
-- Done: Task 1 (existing-VM provisioning, `dec71fa`), Task 2 (dummy dataset, `9d45036`), Task 6 (agent config, `80b2ae9`).
-- Task 3 (SPE stack on the dev VM): the first full run and the endpoint checks passed. On the re-run, `workflow_stack : Whole stack up` reported `changed`; this has not been debugged. `verify.yml` and the README note are still open.
-- Task 7 was completed on resumption (2026-10-15): OpenAPI adapter, discovery, bounded tool responses and 50 sandbox tests; all 57 agent tests pass. See the progress file and `agent/README.md`. The user requested stopping after Task 7; other unfinished tasks remain unchanged.
-- Not started: Tasks 4, 5 and 8–13. No paid model calls have been made.
+- Done: Tasks 1–9; Task 10 and 11 except their paid checks; Task 12 step 1 (`instances/denbi.example.yml`); Task 13 spec reconciliation (spec §12).
+- Pending, paid (needs the human's OK): the AG-UI smoke run and a two-turn chat on the dev VM (Task 10 step 8), the promptfoo starter suite (Task 11).
+- Pending, operator: the de.NBI target, its deployment and documentation (Task 12 steps 2–5).
+- The dev VM runs `dev-local` with `spe_frontend: agui` (Anthropic `claude-haiku-5-5`, smoke off).
 
 **To resume**, start a session in the worktree
 `.claude/worktrees/agui-impl` (or a fresh checkout of the branch). Read the

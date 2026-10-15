@@ -1,6 +1,8 @@
 # AG-UI Agent and CopilotKit Frontend Implementation Plan
 
 > **Status:** Implementation plan, ready for review. All checkboxes describe future work; none indicate work performed while writing this document. Follow repository instructions and implement in task order. No additional skill or delegation is required.
+>
+> **Implementation (2026-10-15):** Tasks 1–11 implemented on `agent-agui-frontend-impl`; Task 12 step 1 done, steps 2–5 await the operator; Task 13 reconciled the spec (§12). Paid checks (smoke, two-turn chat, promptfoo suite) await approval. The checkboxes below are left as written; the record is `2026-10-15-agui-frontend-progress.md`.
 
 **Goal:** An SPE instance on an existing VM runs a Pydantic AI agent we own, served over AG-UI, with a minimal CopilotKit chat in front and the existing open-terminal image as its sandbox, selected with `spe_frontend: agui` — first on the development VM, then on a de.NBI VM.
 

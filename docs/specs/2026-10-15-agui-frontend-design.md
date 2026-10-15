@@ -1,6 +1,7 @@
 # AG-UI agent and CopilotKit frontend for SPE instances — design
 
-Date: 2026-10-15 · Branch: `agent-agui-frontend` (from `dd14684`) · Status: draft for review
+Date: 2026-10-15 · Branch: `agent-agui-frontend` (from `dd14684`) · Status: draft for review;
+implemented on `agent-agui-frontend-impl` — §12 records what implementation verified and changed
 
 Context and reasoning: the biohackathon knowledge repository, records 0001–0005
 (0005 is the playground this is sub-project 1 of).
@@ -201,9 +202,12 @@ updated with the finding.
 ### Limits
 
 Per AG-UI run, Pydantic AI `UsageLimits`: `limits.request_limit` (model
-requests, default 50) and `limits.tool_calls_limit` (default 100). Hitting a
-limit ends the run with an AG-UI `RUN_ERROR` carrying a clear message, and
-the chat shows it.
+requests, default 50), `limits.tool_calls_limit` (default 100) and
+`limits.total_tokens_limit` (default 400000, added during implementation from
+the spend concern). Hitting a limit ends the run with an AG-UI `RUN_ERROR`
+carrying a clear message, and the chat shows it. These are per-run caps, not
+aggregate spend enforcement: the provider account's spend limit is the
+aggregate cap, and portal or per-user budgets remain deferred.
 
 ### Run log
 
@@ -227,7 +231,7 @@ tools:
   sandbox_url: http://sandbox:8000
   sandbox_operations: all   # or a list of operationIds
   max_output_bytes: 16384
-limits: { request_limit: 50, tool_calls_limit: 100 }
+limits: { request_limit: 50, tool_calls_limit: 100, total_tokens_limit: 400000 }
 ```
 
 Keys (LLM, agent, sandbox) come from `agent.env`, never from `agent.yaml`.
@@ -242,7 +246,8 @@ as AG-UI defines; the agent keeps no session state. Accepted for #1 (0002,
 
 - Next.js app, two parts:
   - `app/page.tsx`: full-screen `<CopilotChat>` wired to agent `spe`.
-  - `app/api/copilotkit/route.ts`: `CopilotRuntime` (`@copilotkit/runtime/v2`)
+  - `app/api/copilotkit/[[...slug]]/route.ts` (catch-all; implementation
+    finding, §12): `CopilotRuntime` (`@copilotkit/runtime/v2`)
     with `agents: { spe: new HttpAgent({ url: AGENT_URL, headers: { Authorization: … } }) }`
     (`@ag-ui/client`).
 - **Tool calls are rendered** with `useDefaultRenderTool`
@@ -293,9 +298,11 @@ spe_existing_ssh_key: null      # null: let ssh config decide; else a private ke
   requires `-e spe_confirm_reset=<instance>` and checks the ownership
   marker first. This is also the reset story 0005 asks for.
 - **Controller**: wherever `ansible-playbook` runs needs the base dataset
-  at `spe_source_data_root` (rsynced to the VM) — today only
-  `spe-ga4gh-api-2` has it — and SSH to the target (through the de.NBI
-  jump host).
+  at `spe_source_data_root` (rsynced to the VM) and SSH to the target
+  (through the de.NBI jump host). Correction: `/data-share` on
+  `spe-ga4gh-api-2` was found empty when inspected, so no controller is known
+  to hold the GIAB base dataset; generate the dummy dataset
+  (`dev/make_dummy_dataset.py`) on the controller instead.
 
 ### 7.1 First test target: this development VM
 
@@ -324,8 +331,10 @@ host:
   `spe_agent_model_provider: anthropic`, `spe_agent_model: claude-haiku-5-5`,
   with `ANTHROPIC_API_KEY` exported
   from `~/.config/spe-dev/llm.env` (outside any repository, mode 0600).
-- An example instance file `instances/dev-local.yml` carries these
-  settings (no secrets; the seed is a throwaway dev value).
+- An example instance file `instances/dev-local.example.yml` carries these
+  settings with `spe_seed: null`. Correction: real instance files, the
+  development one included, are ignored by git and never committed, because
+  the seed reproduces every canary.
 
 ### Variables (added to `group_vars/all.yml`)
 
@@ -333,7 +342,7 @@ host:
 spe_frontend: openwebui              # unchanged default; set agui to use this
 spe_agui_ui_port: 3000               # 127.0.0.1 on the VM
 spe_agui_agent_port: 8100            # 127.0.0.1 on the VM
-spe_agui_smoke: true                 # one LLM-backed AG-UI run in the checks
+spe_agui_smoke: false                # true: one LLM-backed AG-UI run in the checks (paid; off by default)
 spe_agent_model_provider: openai_compatible   # openai_compatible | anthropic
 spe_agent_model: "{{ spe_webui_model_id }}"
 spe_agent_llm_key: "{{ spe_denbi_api_key if spe_agent_model_provider == 'openai_compatible' else lookup('ansible.builtin.env', 'ANTHROPIC_API_KEY') }}"
@@ -342,6 +351,7 @@ spe_agent_sandbox_operations: all
 spe_agent_max_output_bytes: 16384
 spe_agent_request_limit: 50
 spe_agent_tool_calls_limit: 100
+spe_agent_total_tokens_limit: 400000
 spe_agent_api_key: "{{ (spe_seed | string ~ ':agent-api') | hash('sha256') }}"
 spe_agui_source_dir: "{{ playbook_dir }}/../.."   # repo root on the controller
 ```
@@ -487,3 +497,72 @@ Each is recorded back into this spec when settled.
 5. CopilotKit v2 package names and the `HttpAgent` headers option.
 6. That a read-only root filesystem works for the Next.js and uvicorn
    images; drop it for a container where it does not, and say so here.
+
+## 12. Implementation findings (2026-10-15)
+
+Recorded during implementation on `agent-agui-frontend-impl`; the plan's progress file
+(`docs/plans/2026-10-15-agui-frontend-progress.md`) holds every ruling with its cost if
+wrong. *Verified* means observed in this work; *pending* means not yet observed.
+
+**Versions verified** (installed and exercised): pydantic-ai-slim 2.56.0 (ag-ui,
+anthropic, openai extras), ag-ui-protocol 0.1.22, FastAPI 0.143.2, uvicorn 0.54.0,
+httpx 0.28.1, Python 3.13 image (3.12 for local tests); Next.js 16.4.1, React 19.3.1,
+@copilotkit/react-core and @copilotkit/runtime 1.79.0, @ag-ui/client 1.0.2, Node 24,
+TypeScript 6.0.3 (7.x has no JavaScript API, which `next build`'s type check needs);
+promptfoo 0.124.1; open-terminal 0.12.4
+(`sha256:ca1d60e70f4eca35db62b80b128fffc7d7c156298167aac25cc4982947bcea5b`); Open WebUI
+v0.11.3 source at `2a960a5`. `claude-haiku-5-5` exists and is active (model-info
+endpoint, no model call).
+
+**§11 settled:**
+
+- *0, passwordless sudo*: works on the development VM (`sudo -n true`).
+- *2, prompt combination*: Open WebUI appends the terminal's `/system` prompt to the
+  system message (`utils/middleware.py`, `add_or_update_system_message(..., append=True)`)
+  and later prepends the model's prompt (`routers/openai.py`,
+  `apply_system_prompt_to_body`), joined with `\n`. The agent sends
+  `system_prompt.txt` + `\n` + the sandbox prompt. Client-sent system messages are
+  stripped (`manage_system_prompt='server'`).
+- *3, parameter flattening*: mirrored from `convert_openapi_to_tool_payload`; the
+  differences are listed in `agent/README.md` (no `display_file` inline/page
+  parameters, non-JSON responses as UTF-8 text rather than base64 data URIs,
+  redirects not followed, sandbox key redacted from responses, 30 s deadline).
+- *4, Pydantic AI APIs*: `AGUIAdapter.from_request`/`run_stream`/`streaming_response`
+  (`dispatch_request` equivalent, wrapped so each event can be logged and `RUN_ERROR`
+  sanitised), `Tool.from_schema`, `FunctionModel(stream_function=…)` for offline
+  tests, `UsageLimits(request_limit, tool_calls_limit, total_tokens_limit)`.
+  `AgentRunResult.usage` is a property.
+- *5, CopilotKit v2*: `CopilotKitProvider`, `CopilotChat`, `useDefaultRenderTool`
+  (`@copilotkit/react-core/v2`); `CopilotRuntime` + `createCopilotRuntimeHandler`
+  (`@copilotkit/runtime/v2`), multi-route mode under `basePath: /api/copilotkit`,
+  hence the catch-all route; `HttpAgent({url, headers})` carries the bearer key.
+- *6, read-only root filesystem*: verified for both images. The agent needs a `/tmp`
+  tmpfs and its run-log volume (uid 10001); the chat UI (Next.js standalone output,
+  `node server.js`) needs `/tmp` and `/app/.next/cache` as tmpfs (uid 1000). Both run
+  with `cap_drop: ALL` and `no-new-privileges`.
+- *1, de.NBI hosts*: pending (Task 12 needs the operator's target choice).
+
+**Behaviour added or made precise:**
+
+- *Readiness*: `/healthz` and authenticated `/agent` answer 503 until the sandbox's
+  OpenAPI is read (retry 1 s doubling to 30 s); afterwards the sandbox is probed every
+  30 s and a failure returns the service to 503 until rediscovery, so a sandbox
+  restart needs no agent restart (verified with the real image). Auth is checked
+  before readiness.
+- *Errors*: `RUN_ERROR` messages have the three key values redacted and are cut to 500
+  characters; a run ends with exactly one terminal event.
+- *Run log*: built from the AG-UI events sent to the client; durations run from the end
+  of a call's arguments to its result; failed runs have no usage.
+- *Telemetry*: off in the chat UI image (`NEXT_TELEMETRY_DISABLED`,
+  `COPILOTKIT_TELEMETRY_DISABLED`, `DO_NOT_TRACK`), which CopilotKit's runtime also
+  reports to its browser client; the documented promptfoo run disables its telemetry.
+- *Deployment*: build contexts are the git-tracked files only; images are tagged by a
+  content hash; a label carries the hash of the bind-mounted config so a change to it
+  alone recreates the agent; the openwebui role now removes orphans so switching works
+  in both directions; the key-boundary check asks the sandbox's own `/execute` API.
+
+**Observed results (development VM, `anthropic`/`claude-haiku-5-5`):** create,
+converge without rebuild or restart, `verify.yml`, frontend switching both ways, the
+key boundary and the browser UI against a scripted agent — all without model calls.
+**Pending, paid, awaiting approval:** the smoke run, a two-turn chat with the real
+model, and the starter promptfoo suite. **Pending, operator:** the de.NBI deployment.
