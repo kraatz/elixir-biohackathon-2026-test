@@ -69,7 +69,7 @@
       name: "{{ spe_webui_admin_name }}"
       email: "{{ spe_webui_admin_email }}"
       password: "{{ spe_webui_admin_password }}"
-    status_code: [200, 400]   # 400 = account already exists (idempotent re-run)
+    status_code: [200, 400, 403]   # 400/403 = account exists or signup closed (re-run); sign-in below checks it
   register: webui_signup
   changed_when: webui_signup.status == 200
   no_log: true
