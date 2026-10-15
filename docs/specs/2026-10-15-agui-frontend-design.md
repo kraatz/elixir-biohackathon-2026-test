@@ -141,7 +141,13 @@ Two providers, chosen in `agent.yaml` (`model.provider`):
   `spe_agent_model` (default `spe_webui_model_id`, `qwen3.8-27b`), key
   `OPENAI_API_KEY`.
 - `anthropic` (local testing, where the de.NBI endpoint is not reachable):
-  Pydantic AI's Anthropic model, key `ANTHROPIC_API_KEY`.
+  Pydantic AI's Anthropic model, key `ANTHROPIC_API_KEY`. **Only
+  `claude-haiku-5-5`** (decided 2026-10-15, to keep spend low: $0.10 input
+  / $0.50 output per MTok for prompts up to 100k tokens, verified on the
+  Anthropic pricing page 2026-10-15). The role rejects any other Anthropic
+  model name, so a typo cannot select a pricier one. Spend is capped
+  outside the code by a spend limit on the Anthropic Console's Billing
+  page, and inside it by `limits` below.
 
 The key comes from `agent.env`, which only this container receives.
 Results from the two providers are not comparable with each other; the
@@ -315,7 +321,8 @@ host:
   in the plan. Workflows that need real genomes (`gatk-hc-chr20`) are
   left out of `spe_workflows`; `wes-drs-smoke` is kept.
 - **LLM**: the de.NBI endpoint is internal (no DNS here), so
-  `spe_agent_model_provider: anthropic` with `ANTHROPIC_API_KEY` exported
+  `spe_agent_model_provider: anthropic`, `spe_agent_model: claude-haiku-5-5`,
+  with `ANTHROPIC_API_KEY` exported
   from `~/.config/spe-dev/llm.env` (outside any repository, mode 0600).
 - An example instance file `instances/dev-local.yml` carries these
   settings (no secrets; the seed is a throwaway dev value).
