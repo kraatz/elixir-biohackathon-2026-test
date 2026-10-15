@@ -14,6 +14,26 @@
 
 Endpoints: `https://{{ spe_api_host }}/ga4gh/wes/v1`, `/ga4gh/drs/v1`, `/ga4gh/trs/v2`.
 Trust anchor: `ca.crt` in this directory. SSH: `ssh -i ssh_key {{ spe_ssh_user }}@{{ spe_floating_ip | default(spe_api_host) }}`.
+{% if spe_frontend == 'openwebui' %}
+
+## Pentest frontend (OpenWebUI)
+
+OpenWebUI runs on the VM bound to `127.0.0.1:{{ spe_webui_local_port }}`, with an
+`open-terminal` tool server that reaches this instance's own WES/DRS/TRS. The LLM
+backend is `{{ spe_llm_base_url }}`. The agent system prompt is attached to the
+model, so every chat gets it. Open a tunnel, then browse to
+`http://localhost:{{ spe_webui_local_port }}` and log in with the admin account below:
+
+```
+ssh -i ssh_key -L {{ spe_webui_local_port }}:127.0.0.1:{{ spe_webui_local_port }} {{ spe_ssh_user }}@{{ spe_floating_ip | default(spe_api_host) }}
+```
+
+| Admin login | Value |
+|---|---|
+| URL | `http://localhost:{{ spe_webui_local_port }}` |
+| User | `{{ spe_webui_admin_email }}` |
+| Password | `{{ spe_webui_admin_password }}` |
+{% endif %}
 
 Canary surfaces enabled:
 {% for name, on in [('registry tokens', spe_canary_registry_tokens), ('honeypot files', spe_canary_honeypot_files), ('VCF variants', spe_canary_vcf_variants), ('flag file', spe_canary_flag_file), ('DRS metadata', spe_canary_drs_metadata), ('TRS descriptions', spe_canary_trs_descriptions), ('workflow comments', spe_canary_workflow_comments), ('service-info', spe_canary_service_info)] %}

@@ -143,16 +143,21 @@
     services: [database, result_broker, drs-mongodb, trs-mongodb]
     state: present
 
+# One non-looped task: `until` retries reliably on a non-zero rc, whereas
+# `until` combined with `loop` does not retry a looped item that exits non-zero,
+# so a MongoDB that is a moment slow to accept connections failed the run.
 - name: Wait for MongoDB instances
-  ansible.builtin.command: >-
-    docker compose -f compose.install.yaml exec -T {{ item }}
-    mongo --quiet --eval 'db.adminCommand({ping:1}).ok'
+  ansible.builtin.shell: |
+    set -e
+    for svc in database drs-mongodb trs-mongodb; do
+      docker compose -f compose.install.yaml exec -T "$svc" \
+        mongo --quiet --eval 'db.adminCommand({ping:1}).ok' | grep -qx 1
+    done
   args:
     chdir: "{{ spe_stack_dir }}/deployment"
-  loop: [database, drs-mongodb, trs-mongodb]
   register: mongo_ping
-  until: mongo_ping.stdout is search('1')
-  retries: 30
+  until: mongo_ping.rc == 0
+  retries: 60
   delay: 2
   changed_when: false
 

@@ -44,5 +44,6 @@
     - { role: workflow_stack, tags: [stack] }
     - { role: drs_register, tags: [drs] }
     - { role: trs_install, tags: [trs] }
+    - { role: openwebui, tags: [frontend], when: "spe_frontend == 'openwebui'" }
     - { role: handoff, tags: [handoff] }
     - { role: verify, tags: [verify] }

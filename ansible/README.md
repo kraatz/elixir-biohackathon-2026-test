@@ -23,6 +23,7 @@ from a fresh, identical state defined by a parameter file.
 
 ```bash
 cp instances/example.yml instances/eval-07.yml   # set spe_instance and spe_seed
+export DENBI_LLM_API_KEY=...                      # LLM key for the OpenWebUI frontend
 ansible-playbook playbooks/create.yml  -e @instances/eval-07.yml
 ansible-playbook playbooks/verify.yml  -e @instances/eval-07.yml   # endpoints + smoke run
 ansible-playbook playbooks/destroy.yml -e @instances/eval-07.yml
@@ -54,8 +55,13 @@ still runs first to find the host).
 5. **drs_register**: registers every file of the selected tiers in DRS.
 6. **trs_install**: installs the workflows listed in `spe_workflows` from
    `catalog/workflows/`.
-7. **handoff**: writes `output/<instance>/` (see below).
-8. **verify**: endpoint checks and a WES smoke run with a DRS input.
+7. **openwebui** (only when `spe_frontend == openwebui`): builds an
+   `open-terminal` image carrying this instance's own CA and the WES/DRS/TRS
+   bases, then runs OpenWebUI + open-terminal in a `spe-frontend` compose
+   project. OpenWebUI is bound to `127.0.0.1:8080` and
+   uses the de.NBI LLM endpoint; the operator reaches it over an SSH tunnel.
+8. **handoff**: writes `output/<instance>/` (see below).
+9. **verify**: endpoint checks and a WES smoke run with a DRS input.
 
 ## Output directory
 
@@ -103,7 +109,37 @@ workflow files next to it. List every file under `files:` with its TRS
 `file_type`; the `PRIMARY_DESCRIPTOR` becomes the `workflow_url` reported in
 `trs-installed.json`.
 
+## Pentest frontend (OpenWebUI)
+
+Each instance runs a chat frontend on the API VM so an operator can drive an LLM
+agent against that instance's own SPE and probe for canary leakage. It is on by
+default (`spe_frontend: openwebui`); set `spe_frontend` to `none` (or any other
+value) to skip it. The role deploys two containers in a `spe-frontend` compose
+project under `spe_frontend_dir`:
+
+- **open-webui** — the chat UI, bound to `127.0.0.1:8080` on the VM, using the
+  de.NBI LLM endpoint (`spe_llm_base_url`) as its model backend.
+- **open-terminal** — an OpenWebUI tool server built with this instance's own
+  self-signed CA and the `WES_BASE`/`DRS_BASE`/`TRS_BASE` of the same VM. The
+  agent uses it to call the three APIs with TLS verification on.
+
+The LLM API key is never stored in the repo. Export it on the controller before
+running (or pass `-e spe_denbi_api_key=...`):
+
+```bash
+export DENBI_LLM_API_KEY=$(grep '^OPENAI_API_KEY=' ~/agent-stack/webui.env | cut -d= -f2-)
+```
+
+OpenWebUI is not exposed to the network. Reach it with an SSH tunnel (the exact
+command, with the instance's floating IP, is in `output/<instance>/summary.md`):
+
+```bash
+ssh -i output/<instance>/ssh_key -L 8080:127.0.0.1:8080 ubuntu@<floating-ip>
+# then open http://localhost:8080 and create the first account (becomes admin)
+```
+
 ## Not covered yet
 
-- The agent VM (planned as a second server per instance).
-- Updating the agent VM with `ca.crt` and the API host.
+- A reverse proxy to reach several instances' frontends at once (planned; for
+  now each frontend is localhost-only and reached by its own SSH tunnel).
+- Other frontends behind `spe_frontend` (OpenWebUI is the only option today).
