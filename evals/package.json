@@ -1,0 +1,11 @@
+{
+  "name": "spe-evals",
+  "private": true,
+  "description": "Pins promptfoo for the SPE agent evaluations",
+  "scripts": {
+    "eval": "promptfoo eval -c promptfooconfig.yaml --no-cache --no-share -o reports/results.json"
+  },
+  "devDependencies": {
+    "promptfoo": "0.124.1"
+  }
+}
