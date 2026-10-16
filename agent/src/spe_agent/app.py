@@ -41,6 +41,10 @@ class _EventStream(AGUIEventStream):
     with qwen) can send a content chunk between a tool call's argument chunks. The arguments that
     follow then come after the call's TOOL_CALL_END, and the AG-UI client rejects them ("No active
     tool call found"). AG-UI lets a text message and tool calls be open at once, so the ends wait.
+
+    The held ends also go out before RUN_ERROR (a stream that breaks mid-response reaches
+    `on_error` before `after_response`, and the client accepts nothing after RUN_ERROR) and before
+    a call that reuses a held call's ID starts.
     """
 
     _pending_ends: list[ToolCallPart] | None = None
@@ -50,13 +54,32 @@ class _EventStream(AGUIEventStream):
         return
         yield
 
+    async def _flush_ends(self, tool_call_id: str | None = None) -> AsyncIterator[BaseEvent]:
+        """Send the held ends: all of them, or only those for `tool_call_id`."""
+        pending = self._pending_ends or []
+        flush = [p for p in pending if tool_call_id is None or p.tool_call_id == tool_call_id]
+        self._pending_ends = [p for p in pending if p not in flush] or None
+        for part in flush:
+            async for event in super().handle_tool_call_end(part):
+                yield event
+
+    async def handle_tool_call_start(self, part: ToolCallPart) -> AsyncIterator[BaseEvent]:
+        async for event in self._flush_ends(part.tool_call_id):
+            yield event
+        async for event in super().handle_tool_call_start(part):
+            yield event
+
     async def after_response(self) -> AsyncIterator[BaseEvent]:
         async for event in super().after_response():
             yield event
-        pending, self._pending_ends = self._pending_ends or [], None
-        for part in pending:
-            async for event in super().handle_tool_call_end(part):
-                yield event
+        async for event in self._flush_ends():
+            yield event
+
+    async def on_error(self, error: Exception) -> AsyncIterator[BaseEvent]:
+        async for event in self._flush_ends():
+            yield event
+        async for event in super().on_error(error):
+            yield event
 
 
 class _Adapter(AGUIAdapter):

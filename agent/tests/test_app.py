@@ -263,6 +263,42 @@ async def test_text_inside_a_tool_call_keeps_the_call_open(tmp_path):
     assert json.loads(call.content)["command"] == "ls"
 
 
+@pytest.mark.parametrize("chunks", [[' "ls"}', "\n"], []], ids=["after-text", "mid-arguments"])
+async def test_stream_error_ends_held_tool_calls_before_run_error(tmp_path, chunks):
+    # A connection that drops mid-response: the held TOOL_CALL_END must not follow RUN_ERROR,
+    # which the AG-UI client rejects ("The run has already errored"), hiding the real error.
+    async def stream(messages, info):
+        yield {0: DeltaToolCall(name="run_command", json_args='{"command":', tool_call_id="chatcmpl-tool-1")}
+        for chunk in chunks:
+            yield chunk if chunk == "\n" else {0: DeltaToolCall(json_args=chunk)}
+        raise RuntimeError("peer closed connection")
+
+    app, _ = build(tmp_path, model=FunctionModel(stream_function=stream))
+    async with running(app) as c:
+        await until_status(c, 200)
+        evs = await post_run(c)
+    assert tool_call_violations(evs) == []
+    assert "TOOL_CALL_END" in [e["type"] for e in evs]
+    assert terminal(evs) == ["RUN_ERROR"] and evs[-1]["type"] == "RUN_ERROR"
+
+
+async def test_reused_tool_call_id_ends_the_held_call_first(tmp_path):
+    # Two calls with one ID in a response: the first must end before the second starts.
+    async def stream(messages, info):
+        if isinstance(messages[-1].parts[-1], ToolReturnPart):
+            yield "done"
+            return
+        yield {0: DeltaToolCall(name="run_command", json_args='{"command": "ls"}', tool_call_id="call-1")}
+        yield {1: DeltaToolCall(name="run_command", json_args='{"command": "pwd"}', tool_call_id="call-1")}
+
+    app, _ = build(tmp_path, model=FunctionModel(stream_function=stream))
+    async with running(app) as c:
+        await until_status(c, 200)
+        evs = await post_run(c)
+    assert tool_call_violations(evs) == []
+    assert len(terminal(evs)) == 1 and evs[-1]["type"] in ("RUN_FINISHED", "RUN_ERROR")
+
+
 async def test_tool_call_reaches_sandbox_with_its_key_and_thread(tmp_path):
     app, sandbox = build(tmp_path)
     async with running(app) as c:
