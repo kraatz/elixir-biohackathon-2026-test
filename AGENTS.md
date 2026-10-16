@@ -12,6 +12,7 @@ guide for humans and coding agents working in this repository.
 | `chat-ui/` | Next.js + CopilotKit chat for the agent |
 | `evals/` | promptfoo provider, assertions and starter suite against the agent |
 | `dev/` | Development helpers: dummy dataset generator, tests for host-side scripts |
+| `docs/getting-started.md` | Deploying and using an instance, and its private configuration |
 | `docs/specs/`, `docs/plans/` | Design specs and implementation plans |
 
 ## Working rules
@@ -36,31 +37,18 @@ cd ansible && ansible-playbook playbooks/create.yml -e @instances/<name>.yml </d
 Ansible needs a blocking stdin here: always run it with `</dev/null`, from
 `ansible/`. The collections come from the system Ansible package.
 
-## Work in progress: AG-UI agent frontend (handed off)
+## AG-UI agent frontend
 
-Plan `docs/plans/2026-10-15-agui-frontend.md`, from spec
-`docs/specs/2026-10-15-agui-frontend-design.md`. Implementation is on branch
-`agent-agui-frontend-impl`, cut from `agent-agui-frontend` at `c5960c6`. It has
-its own branch because the main working copy holds `agent-agui-frontend`;
-fast-forward that branch to this one once the work is accepted. Nothing is pushed.
+Built from plan `docs/plans/2026-10-15-agui-frontend.md` and spec
+`docs/specs/2026-10-15-agui-frontend-design.md` (§12: what implementation verified
+and changed) on branch `agent-agui-frontend`. The record of the work, every
+deviation from the plan with its cost if wrong, and the acceptance evidence is
+[`docs/plans/2026-10-15-agui-frontend-progress.md`](docs/plans/2026-10-15-agui-frontend-progress.md).
+How to deploy and use it: [`docs/getting-started.md`](docs/getting-started.md).
 
-**The handoff.** The first implementation session stopped partway, on 2026-10-15,
-and passed the job to a new session at the user's request. Its record is
-[`docs/plans/2026-10-15-agui-frontend-progress.md`](docs/plans/2026-10-15-agui-frontend-progress.md):
-the status of each task with its evidence, every departure from the plan with
-its cost if wrong, the Open WebUI behaviour to copy, and the local files that
-are not in git. That file is the source of truth for where the work stands.
-Update it as tasks finish, and commit it with the work.
-
-State (2026-10-15, second session):
-
-- Done: Tasks 1–12, including the model-backed checks on the dev VM and on de.NBI; Task 13 spec reconciliation (spec §12).
-- Task 12 done: instance `denbi-agui-01` runs on de.NBI `agent-service-1` (private instance file and output only in this worktree). Converging there needs `-e spe_min_free_gb=5` until disk is freed.
-- The dev VM runs `dev-local` with `spe_frontend: agui` (Anthropic `claude-haiku-5-5`, smoke off).
-
-**To resume**, start a session in the worktree
-`.claude/worktrees/agui-impl` (or a fresh checkout of the branch). Read the
-progress file, then the plan, and continue at the first task not marked done.
-The dev VM already runs the `dev-local` instance. Its private instance file
-`ansible/instances/dev-local.yml` and its `ansible/output/dev-local/` exist
-only in that worktree.
+All 13 tasks are done, including the model-backed checks on the development VM
+(Anthropic `claude-haiku-5-5`) and on de.NBI (`qwen3.8-27b`). Running instances
+(2026-10-16): `dev-local` on the development VM and `denbi-agui-01` on de.NBI
+`agent-service-1` (converging there needs `-e spe_min_free_gb=5` until disk is
+freed). Their private instance files and `ansible/output/` directories exist only
+in the operator's checkout, never in git.

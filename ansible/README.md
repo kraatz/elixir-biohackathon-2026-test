@@ -8,6 +8,10 @@ from a fresh, identical state defined by a parameter file.
 
 ## Controller requirements
 
+For an instance on a VM that already exists (`spe_provision: existing`), most
+of what follows is not needed: see [`docs/getting-started.md`](../docs/getting-started.md).
+The list below is for creating VMs in OpenStack.
+
 - Python 3 with `ansible-core`, `openstacksdk` (the venv `~/.venv-openstack`
   on spe-ga4gh-api-2 has both; `source ~/.venv-openstack/bin/activate`).
 - Collections: `ansible-galaxy collection install -r requirements.yml -p collections`.
@@ -23,6 +27,8 @@ from a fresh, identical state defined by a parameter file.
 
 ```bash
 cp instances/example.yml instances/eval-07.yml   # set spe_instance and spe_seed
+# existing VM with the AG-UI agent: start from instances/denbi.example.yml or
+# dev-local.example.yml instead (docs/getting-started.md)
 export DENBI_LLM_API_KEY=...                      # LLM key for the OpenWebUI frontend
 ansible-playbook playbooks/create.yml  -e @instances/eval-07.yml
 ansible-playbook playbooks/verify.yml  -e @instances/eval-07.yml   # endpoints + smoke run
