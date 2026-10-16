@@ -14,6 +14,24 @@ chat UI to probe it, and promptfoo evaluations that test the agent directly.
   the agent, its chat UI and its evaluations.
 - `threats/`: the threat model catalog (`validate.py` checks it against `vocabulary.yaml`).
 
+## Try it now
+
+One instance is already running on the de.NBI VM `agent-service-1` (model
+`qwen3.8-27b` on the de.NBI endpoint). If you can SSH to that VM (through the de.NBI
+jump host; see [section 3 of the getting-started guide](docs/getting-started.md#3-reach-the-vm)
+for the SSH config), forward the chat UI's port:
+
+```bash
+ssh -F ~/.ssh/config ubuntu@agent-service-1 -N -L 3000:127.0.0.1:3000
+```
+
+Then open <http://localhost:3000> and ask, for example, "List the registered
+workflows." Every tool call the agent makes appears as a card you can expand. No key is
+needed in the browser: the chat UI holds the agent's key on its server side. If port
+3000 is taken on your machine, change only the first number, e.g.
+`-L 13000:127.0.0.1:3000` and open <http://localhost:13000>. A reload starts a new
+conversation.
+
 ## Architecture
 
 ```mermaid
