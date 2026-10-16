@@ -19,9 +19,33 @@ guide for humans and coding agents working in this repository.
 
 - **Commit each coherent change** with a short imperative subject, and add a body saying why when the subject doesn't. Run `git status` and `git diff --staged` first, and stage files by name rather than with `git add -A`.
 - **Never commit secrets**: real instance files (`ansible/instances/*.yml` other than `example.yml` and `*.example.yml`, ignored by git) carry the seed that reproduces every canary. Also never commit `ansible/output/`, `canaries.json`, keys, `clouds.yaml` or `.env` files.
-- **Do not push**, rewrite history or force anything unless asked. Pushing is the repository owner's call.
+- **Push only as the last step of a unit of work** (below): a fast-forward of the working branch. Never rewrite history or force-push.
 - **Paid model calls need the human's OK** before they run. On this repository's development VM the agent uses Anthropic with `claude-haiku-5-5`, pinned by `spe_agent_allowed_models` in that VM's instance file (a spend guard for that VM). Other setups choose their own provider and model.
 - **Follow the plan's rulings discipline**: when work departs from a plan, record the decision, why, and its cost if wrong in that plan's progress file.
+
+## Lifecycle of a unit of work
+
+A unit of work is a coherent change: a fix, a feature, a docs update. Each is
+done in its own worktree and ends on the working branch (`agent-agui-frontend`),
+pushed, so the local branch and the remote always show the current state.
+
+1. **Create a worktree from the local working branch**, not from `origin`, so it
+   includes unpushed commits:
+   `git worktree add <path> -b <topic> agent-agui-frontend`.
+2. **Commit** in the worktree, as in the working rules above.
+3. **Fast-forward the local working branch** to the work, in the main checkout:
+   `git merge --ff-only <topic>`.
+4. **Push it**: `git push origin agent-agui-frontend`, a fast-forward only. If the
+   remote has moved on, fetch and rebase the local work, never force.
+5. **Clean up the worktree**: `git worktree remove <path>` and
+   `git branch -d <topic>`. Check first that it has no uncommitted changes.
+
+Private instance files and `ansible/output/` exist only in the main checkout,
+not in a worktree. To deploy a worktree's agent or chat UI before it is merged,
+run Ansible from the main checkout with `-e spe_agui_source_dir=<worktree>`.
+
+When this repository is a submodule (of `biohackathon`), the parent records the
+pinned commit; move the pin there after the push.
 
 ## Running things
 
