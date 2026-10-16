@@ -186,7 +186,7 @@ OpenWebUI is not exposed to the network. Reach it with an SSH tunnel (the exact
 command, with the instance's floating IP, is in `output/<instance>/summary.md`):
 
 ```bash
-ssh -i output/<instance>/ssh_key -L 8080:127.0.0.1:8080 ubuntu@<floating-ip>
+ssh -i output/INSTANCE/ssh_key -L 8080:127.0.0.1:8080 ubuntu@FLOATING_IP
 # then open http://localhost:8080 and create the first account (becomes admin)
 ```
 
@@ -254,14 +254,14 @@ untouched: its containers kept running, `daemon.json` did not change. Template:
 
 ```bash
 export DENBI_LLM_API_KEY=...                       # never in the repository
-ansible-playbook playbooks/create.yml -e @instances/<copy>.yml </dev/null
-ansible-playbook playbooks/verify.yml -e @instances/<copy>.yml -e spe_agui_smoke=true </dev/null
+ansible-playbook playbooks/create.yml -e @instances/NAME.yml </dev/null
+ansible-playbook playbooks/verify.yml -e @instances/NAME.yml -e spe_agui_smoke=true </dev/null
 ssh -F ~/.ssh/config ubuntu@agent-service-1 -N -L 3000:127.0.0.1:3000 -L 8100:127.0.0.1:8100
-# then http://localhost:3000; the agent key is output/<instance>/agent_api_key
+# then http://localhost:3000; the agent key is output/INSTANCE/agent_api_key
 # logs:     ssh … 'docker compose -p spe-frontend logs agent'
 # run log:  ssh … 'docker compose -p spe-frontend exec agent cat /var/lib/spe-agent/runs.jsonl'  (private)
 # restart:  ssh … 'docker compose -p spe-frontend restart'
-# reset:    ansible-playbook playbooks/destroy.yml -e @instances/<copy>.yml -e spe_confirm_reset=<instance>
+# reset:    ansible-playbook playbooks/destroy.yml -e @instances/NAME.yml -e spe_confirm_reset=INSTANCE
 ```
 
 Observed: create `failed=0` with the WES smoke run `COMPLETE`; the second converge

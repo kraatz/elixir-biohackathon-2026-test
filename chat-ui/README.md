@@ -19,8 +19,8 @@ Telemetry is off in the image: `NEXT_TELEMETRY_DISABLED=1`, `COPILOTKIT_TELEMETR
 ```bash
 npm ci && npm run build                       # type-checks too
 # against the scripted agent (no LLM): in ../agent
-#   uv run --group dev python ../dev/fake_agent.py --port 18100 --key <test key>
-AGENT_URL=http://127.0.0.1:18100/agent AGENT_API_KEY=<test key> PORT=3000 node .next/standalone/server.js
+#   uv run --group dev python ../dev/fake_agent.py --port 18100 --key TEST_KEY
+AGENT_URL=http://127.0.0.1:18100/agent AGENT_API_KEY=TEST_KEY PORT=3000 node .next/standalone/server.js
 #   (copy .next/static to .next/standalone/.next/static first; the Dockerfile does)
 docker build -t spe-chat-ui .                 # node:24-slim, user node, port 3000
 ```

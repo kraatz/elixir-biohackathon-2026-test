@@ -92,6 +92,9 @@ what already runs on them.
 
 ## 4. Configure an instance
 
+In the commands from here on, replace `NAME` with your instance name (`spe_instance`)
+and `VM` with the VM's SSH host.
+
 1. **Dummy dataset** on the controller (stands in for the GIAB genomes):
 
    ```bash
@@ -103,8 +106,8 @@ what already runs on them.
    ```bash
    cd ansible
    umask 077
-   cp instances/denbi.example.yml instances/<name>.yml        # a remote VM
-   # or: cp instances/dev-local.example.yml instances/<name>.yml   # the controller itself
+   cp instances/denbi.example.yml instances/NAME.yml        # a remote VM
+   # or: cp instances/dev-local.example.yml instances/NAME.yml   # the controller itself
    python3 -c "import secrets; print(secrets.randbelow(10**12))"   # the seed
    ```
 
@@ -130,7 +133,7 @@ what already runs on them.
 ```bash
 cd ansible
 export SPE_LLM_API_KEY=...          # your provider's key (DENBI_LLM_API_KEY / ANTHROPIC_API_KEY also work)
-ansible-playbook playbooks/create.yml -e @instances/<name>.yml </dev/null
+ansible-playbook playbooks/create.yml -e @instances/NAME.yml </dev/null
 ```
 
 The first run builds images on the VM and takes a while. It ends with checks that
@@ -139,8 +142,8 @@ key boundary (commands in the sandbox see neither the agent key nor the LLM key)
 Re-running converges and changes nothing in the frontend.
 
 ```bash
-ansible-playbook playbooks/verify.yml -e @instances/<name>.yml </dev/null                         # no model call
-ansible-playbook playbooks/verify.yml -e @instances/<name>.yml -e spe_agui_smoke=true </dev/null  # + one agent run
+ansible-playbook playbooks/verify.yml -e @instances/NAME.yml </dev/null                         # no model call
+ansible-playbook playbooks/verify.yml -e @instances/NAME.yml -e spe_agui_smoke=true </dev/null  # + one agent run
 ```
 
 If a later run is refused for disk only because the images now occupy the VM, pass
@@ -151,7 +154,7 @@ If a later run is refused for disk only because the images now occupy the VM, pa
 `ansible/output/<instance>/hosts.yml` has the tunnel command (`agui_tunnel`):
 
 ```bash
-ssh -F ~/.ssh/config ubuntu@<vm> -N -L 3000:127.0.0.1:3000 -L 8100:127.0.0.1:8100
+ssh -F ~/.ssh/config ubuntu@VM -N -L 3000:127.0.0.1:3000 -L 8100:127.0.0.1:8100
 ```
 
 Then open `http://localhost:3000`. Every tool call the agent makes is shown as a
@@ -175,7 +178,7 @@ docker compose -p spe-frontend exec agent cat /var/lib/spe-agent/runs.jsonl   # 
 ## 7. Reset and clean up
 
 ```bash
-ansible-playbook playbooks/destroy.yml -e @instances/<name>.yml -e spe_confirm_reset=<name> </dev/null
+ansible-playbook playbooks/destroy.yml -e @instances/NAME.yml -e spe_confirm_reset=NAME </dev/null
 ```
 
 On an existing VM this never deletes the VM: it takes this instance's compose

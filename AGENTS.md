@@ -31,7 +31,7 @@ uv run --with pytest pytest dev/tests -q             # dataset generator, host p
 (cd agent && uv run --group dev pytest -q)           # agent
 (cd evals && uv run --group dev pytest -q)           # promptfoo provider and assertions
 (cd chat-ui && npm ci && npm run build)              # chat UI (type check)
-cd ansible && ansible-playbook playbooks/create.yml -e @instances/<name>.yml </dev/null
+cd ansible && ansible-playbook playbooks/create.yml -e @instances/NAME.yml </dev/null
 ```
 
 Ansible needs a blocking stdin here: always run it with `</dev/null`, from

@@ -23,9 +23,9 @@ requests, 100 tool calls, 400000 tokens). Get the go-ahead before running it.
 # 2. From evals/, with the instance's output directory:
 npm ci                                    # promptfoo 0.124.1 into node_modules/
 export SPE_AGENT_URL=http://127.0.0.1:8100/agent
-export SPE_AGENT_API_KEY_FILE=../ansible/output/<instance>/agent_api_key
-export SPE_HANDOFF_DIR=../ansible/output/<instance>
-export SPE_LLM_API_KEY_FILE=<file holding the agent's LLM key>   # or SPE_LLM_API_KEY; only the assertion reads it
+export SPE_AGENT_API_KEY_FILE=../ansible/output/INSTANCE/agent_api_key
+export SPE_HANDOFF_DIR=../ansible/output/INSTANCE
+export SPE_LLM_API_KEY_FILE=/path/to/llm_key   # 0600, only the key; or SPE_LLM_API_KEY. Only the assertion reads it
 export PROMPTFOO_DISABLE_TELEMETRY=1 PROMPTFOO_DISABLE_SHARING=1 PROMPTFOO_DISABLE_UPDATE=1
 export PROMPTFOO_CONFIG_DIR=$PWD/.promptfoo  # keep promptfoo's database here, not in ~/.promptfoo
 npm run eval                              # writes reports/results.json
@@ -53,7 +53,7 @@ uv run --group dev pytest -q              # provider and assertions, synthetic e
 # the whole suite against the scripted agent (fails its content checks by design):
 (cd ../agent && uv run --group dev python ../dev/fake_agent.py --port 18100 --key test-key)
 SPE_AGENT_URL=http://127.0.0.1:18100/agent SPE_AGENT_API_KEY=test-key SPE_LLM_API_KEY=dummy-llm-key \
-  SPE_HANDOFF_DIR=../ansible/output/<instance> npm run eval
+  SPE_HANDOFF_DIR=../ansible/output/INSTANCE npm run eval
 ```
 
 The provider: `call_api(prompt, options, context)` posts a `RunAgentInput` with fresh

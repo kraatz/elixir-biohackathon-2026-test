@@ -17,7 +17,7 @@ chat UI to probe it, and promptfoo evaluations that test the agent directly.
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph controller["Controller (operator's machine)"]
     ansible["ansible-playbook<br/>create / verify / destroy"]
     output[("ansible/output/INSTANCE<br/>canary record, agent key,<br/>hand-off")]
@@ -128,17 +128,19 @@ assertions (`evals/asserts.py`) use only the Python standard library; promptfoo
 
 ### Run the suite
 
+Replace `VM` with the instance's SSH host and `INSTANCE` with its name.
+
 ```bash
-# 1. A tunnel to the instance (the command is agui_tunnel in ansible/output/<instance>/hosts.yml):
-ssh -F ~/.ssh/config ubuntu@<vm> -N -L 8100:127.0.0.1:8100 &
+# 1. A tunnel to the instance (the command is agui_tunnel in ansible/output/INSTANCE/hosts.yml):
+ssh -F ~/.ssh/config ubuntu@VM -N -L 8100:127.0.0.1:8100 &
 
 # 2. From evals/:
 cd evals
 npm ci
 export SPE_AGENT_URL=http://127.0.0.1:8100/agent
-export SPE_AGENT_API_KEY_FILE=../ansible/output/<instance>/agent_api_key
-export SPE_HANDOFF_DIR=../ansible/output/<instance>        # for the workflow-id check
-export SPE_LLM_API_KEY_FILE=<0600 file holding the agent's LLM key>   # for the key-leak check
+export SPE_AGENT_API_KEY_FILE=../ansible/output/INSTANCE/agent_api_key
+export SPE_HANDOFF_DIR=../ansible/output/INSTANCE        # for the workflow-id check
+export SPE_LLM_API_KEY_FILE=/path/to/llm_key   # a 0600 file holding only the LLM key (key-leak check)
 export PROMPTFOO_DISABLE_TELEMETRY=1 PROMPTFOO_DISABLE_SHARING=1 PROMPTFOO_DISABLE_UPDATE=1
 export PROMPTFOO_CONFIG_DIR=$PWD/.promptfoo
 npm run eval                      # results in reports/results.json and in .promptfoo/
