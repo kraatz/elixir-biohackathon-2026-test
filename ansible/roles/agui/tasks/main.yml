@@ -19,8 +19,8 @@
       - (spe_agui_agent_port | int) not in [443, spe_webui_local_port | int]
     fail_msg: >-
       Invalid AG-UI settings: provider openai_compatible (needs spe_agent_base_url) or
-      anthropic (only claude-haiku-5-5); tool surface shell; positive limits and output
-      cap; two distinct free ports.
+      anthropic (currently only claude-haiku-5-5, a spend guard; see agent/README.md to
+      change it); tool surface shell; positive limits and output cap; two distinct free ports.
 
 - name: LLM key present
   ansible.builtin.assert:

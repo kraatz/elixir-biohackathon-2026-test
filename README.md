@@ -40,7 +40,7 @@ flowchart LR
     end
   end
 
-  llm["LLM endpoint<br/>de.NBI or Anthropic"]
+  llm["LLM endpoint<br/>any OpenAI-compatible API,<br/>or Anthropic"]
 
   ansible -- "SSH (jump host)" --> vm
   ansible --> output
@@ -89,6 +89,20 @@ The sandbox shares a network with the agent, so the agent requires a bearer key 
 every request: otherwise a command in the sandbox could call the agent and spend the
 LLM key. The deployment checks this boundary after every run, through the sandbox's
 own API, without a model call.
+
+**The model is per instance.** The agent talks to one LLM, chosen in the instance
+file: `spe_agent_model_provider: openai_compatible` with a `spe_agent_base_url` and a
+model name works with any OpenAI-compatible API (the de.NBI endpoint, OpenAI, vLLM,
+Ollama, LiteLLM and similar gateways); `anthropic` uses Anthropic's API. The two
+setups we have run are examples, not requirements: our de.NBI instance uses the
+de.NBI endpoint with `qwen3.8-27b`, and our own development VM uses Anthropic with
+`claude-haiku-5-5`, chosen there to keep test spend low. One caveat: that choice is
+also enforced in code today — with `anthropic`, the agent accepts only
+`claude-haiku-5-5` (`ANTHROPIC_MODELS` in `agent/src/spe_agent/config.py`, and the
+check in `ansible/roles/agui/tasks/main.yml`). A setup that wants another Anthropic
+model changes those two places. Other vendors Pydantic AI supports (Google, Bedrock,
+Mistral, Groq, …) need a small addition to the agent's configuration; see
+`agent/README.md`.
 
 **One turn, end to end.** The browser sends the conversation to the chat UI's
 runtime route, which forwards it over AG-UI with the bearer key. The agent sends it
@@ -182,5 +196,6 @@ offline test for any new assertion in `evals/tests/` and run
 `uv run --group dev pytest -q` there; the whole suite also runs without a model
 against the scripted agent in `dev/fake_agent.py` (see `evals/README.md`).
 
-Results depend on the model: runs against Anthropic (development) and the de.NBI
-model are not comparable; record the provider and model with any result.
+Results depend on the model: results from different providers or models (for example
+our development VM's Anthropic runs and our de.NBI runs) are not comparable; record
+the provider and model with any result.

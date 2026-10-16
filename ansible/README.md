@@ -209,9 +209,12 @@ replaces one frontend with the other (its volumes, `open-webui-data` included, s
 The role copies only the files git tracks under `agent/` and `chat-ui/` to
 `spe_frontend_dir/build/` and builds `spe-agent:<hash>` and `spe-chat-ui:<hash>`
 from them (the hash covers the build context, so unchanged sources do not
-rebuild). Model: `spe_agent_model_provider: openai_compatible` with the de.NBI
-endpoint and key (as Open WebUI), or `anthropic` with `ANTHROPIC_API_KEY` exported
-on the controller (only `claude-haiku-5-5`).
+rebuild). Model: `spe_agent_model_provider: openai_compatible` with
+`spe_agent_base_url` (default: the de.NBI endpoint, as Open WebUI) and its key in
+`DENBI_LLM_API_KEY`, which works with any OpenAI-compatible API; or `anthropic` with
+`ANTHROPIC_API_KEY` exported on the controller. With `anthropic` the agent currently
+accepts only `claude-haiku-5-5`, a spend guard from our development VM (see
+`agent/README.md` to change it or to add another vendor).
 
 Checks after deployment and in `verify.yml`, none of which calls the model:
 health, UI, 401 without or with a wrong key, and the key boundary — through the
@@ -225,7 +228,7 @@ real AG-UI run ("List the registered workflows") that must call a tool and finis
 `ui_url`, `agent_url` and the tunnel command (`-L 3000:… -L 8100:…`), empty when
 the instance runs on the controller.
 
-Tested on the development VM on 2026-10-15 with `anthropic`/`claude-haiku-5-5`:
+Tested on our development VM on 2026-10-15 (which uses `anthropic`/`claude-haiku-5-5`):
 create, a second converge without rebuilds or restarts, `verify.yml`, and switching
 to Open WebUI and back; then, with the model, the smoke run (`-e spe_agui_smoke=true`) and a
 two-turn chat in the browser, both passing.
@@ -266,8 +269,8 @@ changed nothing in the sandbox, agui or compose tasks; the no-cost checks passed
 UI, 401s, key boundary); with the model, the AG-UI smoke run, a two-turn chat in the
 browser through the tunnel, and the promptfoo starter suite (3/3) passed. qwen's
 reasoning appears in the chat as a "Thought" block and occasionally as a stray line
-before the answer. Results with `qwen3.8-27b` are not comparable with the Anthropic
-results on the development VM.
+before the answer. Results with `qwen3.8-27b` are not comparable with our development VM's
+Anthropic results.
 
 The images use about 12 GB on that VM: free space fell from 21 GB to 9 GB, below the
 default `spe_min_free_gb: 15`, so later converges there need

@@ -10,8 +10,11 @@ spe_manage_docker: false             # agentvm runs Docker (data-root /storage/d
 spe_source_data_root: /home/agentvm/spe-dummy-data
 spe_workflows: [wes-drs-smoke]       # gatk-hc-chr20 needs real genomes
 spe_frontend: agui
-# The de.NBI LLM endpoint is internal; here the agent uses Anthropic. Export the key
-# before running: set -a; . ~/.config/spe-dev/llm.env; set +a
+# The model is this development VM's choice, not a requirement: the de.NBI endpoint
+# is internal, so this VM uses Anthropic, with the cheap claude-haiku-5-5 to keep test
+# spend low. Your setup may use any OpenAI-compatible API instead
+# (spe_agent_model_provider: openai_compatible, spe_agent_base_url, spe_agent_model).
+# Export the key before running, here: set -a; . ~/.config/spe-dev/llm.env; set +a
 spe_agent_model_provider: anthropic
-spe_agent_model: claude-haiku-5-5    # the only Anthropic model the agent accepts
+spe_agent_model: claude-haiku-5-5    # with anthropic, the agent currently accepts only this model
 spe_agui_smoke: false                # true makes one paid model call per create/verify run

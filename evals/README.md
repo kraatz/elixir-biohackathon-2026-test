@@ -31,7 +31,8 @@ export PROMPTFOO_CONFIG_DIR=$PWD/.promptfoo  # keep promptfoo's database here, n
 npm run eval                              # writes reports/results.json
 ```
 
-On the development VM the LLM key is `ANTHROPIC_API_KEY` in `~/.config/spe-dev/llm.env`;
+Example from our development VM, whose agent uses Anthropic: the LLM key is
+`ANTHROPIC_API_KEY` in `~/.config/spe-dev/llm.env`;
 `SPE_LLM_API_KEY_FILE` must name a file holding only the key, e.g. a 0600 file written
 with `grep -m1 '^ANTHROPIC_API_KEY=' ~/.config/spe-dev/llm.env | cut -d= -f2- > …`.
 
@@ -41,8 +42,9 @@ only; they never appear in prompts, test vars or reports. **Reports and
 canaries**: both are ignored by git; delete them when done (`rm -rf reports .promptfoo`).
 Report each failing test on its own; do not weaken an assertion to get a pass.
 
-Results from `anthropic` (development VM) and the de.NBI `openai_compatible` model are
-not comparable with each other; record the provider and model with any results.
+Results from different providers or models (e.g. our development VM's Anthropic runs and
+our de.NBI runs) are not comparable with each other; record the provider and model with
+any results.
 
 ## Without a model
 

@@ -138,8 +138,8 @@ spe_agui_agent_port: 8100
 spe_agui_smoke: false                # true: one LLM-backed AG-UI run in the checks (a paid call)
 spe_agui_source_dir: "{{ playbook_dir }}/../.."   # repository root on the controller
 spe_agui_build_dir: "{{ spe_frontend_dir }}/build"
-spe_agent_model_provider: openai_compatible       # openai_compatible (de.NBI) | anthropic (local testing)
-spe_agent_model: "{{ spe_webui_model_id }}"       # anthropic: only claude-haiku-5-5 is accepted
+spe_agent_model_provider: openai_compatible       # openai_compatible (any OpenAI-compatible API) | anthropic
+spe_agent_model: "{{ spe_webui_model_id }}"       # anthropic: the agent currently accepts only claude-haiku-5-5 (agent/README.md)
 spe_agent_base_url: "{{ spe_llm_base_url }}"      # openai_compatible only
 # The LLM key never enters the repo: the de.NBI key as for openwebui, or
 # ANTHROPIC_API_KEY from the controller's environment.

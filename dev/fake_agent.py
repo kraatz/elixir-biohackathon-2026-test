@@ -65,6 +65,7 @@ def main() -> None:
     tmp = Path(tempfile.mkdtemp(prefix="fake-agent-"))
     (tmp / "prompt.txt").write_text("You are a scripted test agent.")
     config = Config.model_validate({
+        # Placeholder only: the scripted model replaces it and no LLM is called.
         "model": {"provider": "anthropic", "name": "claude-haiku-5-5"},
         "prompt": {"file": str(tmp / "prompt.txt")},
         "tools": {"sandbox_url": "http://sandbox:8000"},

@@ -20,7 +20,7 @@ guide for humans and coding agents working in this repository.
 - **Commit each coherent change** with a short imperative subject, and add a body saying why when the subject doesn't. Run `git status` and `git diff --staged` first, and stage files by name rather than with `git add -A`.
 - **Never commit secrets**: real instance files (`ansible/instances/*.yml` other than `example.yml` and `*.example.yml`, ignored by git) carry the seed that reproduces every canary. Also never commit `ansible/output/`, `canaries.json`, keys, `clouds.yaml` or `.env` files.
 - **Do not push**, rewrite history or force anything unless asked. Pushing is the repository owner's call.
-- **Paid model calls need the human's OK** before they run. The local Anthropic provider accepts only `claude-haiku-5-5`.
+- **Paid model calls need the human's OK** before they run. On this repository's development VM the agent uses Anthropic with `claude-haiku-5-5` (a spend choice for that VM; with `anthropic` the agent currently accepts only that model, see `agent/README.md`). Other setups choose their own provider and model.
 - **Follow the plan's rulings discipline**: when work departs from a plan, record the decision, why, and its cost if wrong in that plan's progress file.
 
 ## Running things
@@ -47,7 +47,7 @@ deviation from the plan with its cost if wrong, and the acceptance evidence is
 How to deploy and use it: [`docs/getting-started.md`](docs/getting-started.md).
 
 All 13 tasks are done, including the model-backed checks on the development VM
-(Anthropic `claude-haiku-5-5`) and on de.NBI (`qwen3.8-27b`). Running instances
+(where this VM uses Anthropic `claude-haiku-5-5`) and on de.NBI (`qwen3.8-27b`). Running instances
 (2026-10-16): `dev-local` on the development VM and `denbi-agui-01` on de.NBI
 `agent-service-1` (converging there needs `-e spe_min_free_gb=5` until disk is
 freed). Their private instance files and `ansible/output/` directories exist only

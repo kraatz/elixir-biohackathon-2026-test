@@ -42,7 +42,7 @@ needed port is taken, or if disk is short. Nothing on a refused VM is changed.
 | What | What it is for | Where it comes from | Where it lives | Share? |
 |---|---|---|---|---|
 | **Seed** (`spe_seed`) | Derives every canary token, the agent's bearer key, the sandbox key and the Open WebUI admin password. Anyone with it can reproduce all canaries | You generate it (step 4) | Your instance file `ansible/instances/<name>.yml` (git-ignored, mode 0600) | **No.** Never commit it |
-| **LLM key** | Lets the agent call the model | de.NBI endpoint: the project's key (ask the project; on de.NBI VMs Open WebUI already uses it in `~/agent-stack/webui.env` as `OPENAI_API_KEY`). Anthropic (local testing only): your own key | Exported in your shell at run time: `DENBI_LLM_API_KEY` or `ANTHROPIC_API_KEY`. On the VM only in `spe-frontend/agent.env` (0600), read by the agent container alone | **No** |
+| **LLM key** | Lets the agent call the model | Your LLM provider. For the de.NBI endpoint: the project's key (ask the project; on de.NBI VMs Open WebUI already uses it in `~/agent-stack/webui.env` as `OPENAI_API_KEY`). For another OpenAI-compatible API or Anthropic: your own key | Exported in your shell at run time: `DENBI_LLM_API_KEY` or `ANTHROPIC_API_KEY`. On the VM only in `spe-frontend/agent.env` (0600), read by the agent container alone | **No** |
 | **SSH key and config** for de.NBI | Reaching VMs on the private network through the jump host | Your de.NBI account (key registered with de.NBI and on the VMs) | `~/.ssh/config` and your key, outside any repository | **No** |
 | **Agent bearer key** | Required by the agent's AG-UI endpoint; the chat UI and promptfoo send it | Derived from the seed by the playbook | `ansible/output/<instance>/agent_api_key` (0600); on the VM in `agent.env` and `chat-ui.env` (0600) | Only with people who may use the agent |
 | **Canary record** | The answer key: every planted token and where it is | Written by the playbook | `ansible/output/<instance>/canaries.json` (0600; encrypted to `canaries.json.age` if `spe_age_recipient` is set) | **No.** Never copy it to a VM or to a player. `canaries.manifest.sha256` (hashes only) may go to detection tooling |
@@ -120,7 +120,7 @@ what already runs on them.
    | `spe_source_data_root` | the dummy dataset's path on the controller |
    | `spe_manage_docker` | `false` if Docker on the VM already runs other things (the playbook then leaves its packages, config and service alone); `true` to let it install and configure Docker |
    | `spe_data_root` | leave the default `/data-share` only if that path does not exist on the VM. On de.NBI VMs `/data-share` may be the mounted shared dataset: use e.g. `/srv/spe-data` |
-   | `spe_agent_model_provider`, `spe_agent_model` | `openai_compatible` + `qwen3.8-27b` (de.NBI); or `anthropic` + `claude-haiku-5-5` (the only Anthropic model accepted) |
+   | `spe_agent_model_provider`, `spe_agent_model`, `spe_agent_base_url` | your LLM. `openai_compatible` works with any OpenAI-compatible API: set `spe_agent_base_url` (default: the de.NBI endpoint) and the model name, e.g. `qwen3.8-27b` on de.NBI. `anthropic` uses Anthropic's API; there the agent currently accepts only `claude-haiku-5-5`, a spend guard from our development VM (`agent/README.md` says how to change it or add another vendor) |
    | `spe_agui_smoke` | `false`; set `true` on a run to add one model-backed check |
 
    `git status` must not list the file: if it does, stop and check `ansible/.gitignore`.
@@ -129,7 +129,7 @@ what already runs on them.
 
 ```bash
 cd ansible
-export DENBI_LLM_API_KEY=...        # or ANTHROPIC_API_KEY=... for the anthropic provider
+export DENBI_LLM_API_KEY=...        # the key for spe_agent_base_url (openai_compatible); or ANTHROPIC_API_KEY=...
 ansible-playbook playbooks/create.yml -e @instances/<name>.yml </dev/null
 ```
 
@@ -195,6 +195,6 @@ images and `ansible/output/<instance>/` are kept. Then:
   every commit.
 - Never pass a key on a command line or put it in a prompt, test variable or config
   file in the repository; use the environment or a 0600 file.
-- Model-backed runs cost money (Anthropic) or shared capacity (de.NBI); the agent
+- Model-backed runs cost money (commercial APIs) or shared capacity (de.NBI); the agent
   caps each run at 50 model requests, 100 tool calls and 400000 tokens.
 - One instance per VM; do not replace another stack to make the preflight pass.
