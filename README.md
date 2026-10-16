@@ -77,7 +77,7 @@ flowchart TB
   traefik --> wes & drs & trs
   wes & drs --- data
 
-  classDef alt stroke-dasharray: 6 4, fill:#f4f4f4, color:#555
+  classDef alt stroke-dasharray: 6 4
   linkStyle 0,1,2 stroke-dasharray: 6 4
 ```
 
