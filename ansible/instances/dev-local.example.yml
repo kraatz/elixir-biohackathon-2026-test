@@ -16,5 +16,6 @@ spe_frontend: agui
 # (spe_agent_model_provider: openai_compatible, spe_agent_base_url, spe_agent_model).
 # Export the key before running, here: set -a; . ~/.config/spe-dev/llm.env; set +a
 spe_agent_model_provider: anthropic
-spe_agent_model: claude-haiku-5-5    # with anthropic, the agent currently accepts only this model
+spe_agent_model: claude-haiku-5-5
+spe_agent_allowed_models: [claude-haiku-5-5]   # this VM's spend guard: refuse any other model
 spe_agui_smoke: false                # true makes one paid model call per create/verify run

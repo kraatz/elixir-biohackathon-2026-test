@@ -139,13 +139,18 @@ spe_agui_smoke: false                # true: one LLM-backed AG-UI run in the che
 spe_agui_source_dir: "{{ playbook_dir }}/../.."   # repository root on the controller
 spe_agui_build_dir: "{{ spe_frontend_dir }}/build"
 spe_agent_model_provider: openai_compatible       # openai_compatible (any OpenAI-compatible API) | anthropic
-spe_agent_model: "{{ spe_webui_model_id }}"       # anthropic: the agent currently accepts only claude-haiku-5-5 (agent/README.md)
+spe_agent_model: "{{ spe_webui_model_id }}"
 spe_agent_base_url: "{{ spe_llm_base_url }}"      # openai_compatible only
-# The LLM key never enters the repo: the de.NBI key as for openwebui, or
-# ANTHROPIC_API_KEY from the controller's environment.
+# Optional guard, any provider: when non-empty, the role and the agent accept only these
+# model names, so a typo cannot select a pricier model. Empty: no restriction.
+spe_agent_allowed_models: []
+# The LLM key never enters the repo. It comes from the controller's environment:
+# SPE_LLM_API_KEY for any provider; if that is unset, DENBI_LLM_API_KEY
+# (openai_compatible, as for openwebui) or ANTHROPIC_API_KEY (anthropic).
 spe_agent_llm_key: >-
-  {{ spe_denbi_api_key if spe_agent_model_provider == 'openai_compatible'
-     else lookup('ansible.builtin.env', 'ANTHROPIC_API_KEY') }}
+  {{ lookup('ansible.builtin.env', 'SPE_LLM_API_KEY')
+     or (spe_denbi_api_key if spe_agent_model_provider == 'openai_compatible'
+         else lookup('ansible.builtin.env', 'ANTHROPIC_API_KEY')) }}
 spe_agent_tool_surface: shell
 spe_agent_sandbox_operations: all    # or a list of open-terminal operationIds
 spe_agent_include_sandbox_prompt: true

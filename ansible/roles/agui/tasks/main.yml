@@ -7,7 +7,7 @@
     that:
       - spe_agent_model_provider in ['openai_compatible', 'anthropic']
       - spe_agent_model is string and spe_agent_model | length > 0
-      - spe_agent_model_provider != 'anthropic' or spe_agent_model == 'claude-haiku-5-5'
+      - spe_agent_allowed_models | length == 0 or spe_agent_model in spe_agent_allowed_models
       - spe_agent_model_provider != 'openai_compatible' or (spe_agent_base_url | default('', true) | length > 0)
       - spe_agent_tool_surface == 'shell'
       - spe_agent_max_output_bytes | int > 0
@@ -19,16 +19,16 @@
       - (spe_agui_agent_port | int) not in [443, spe_webui_local_port | int]
     fail_msg: >-
       Invalid AG-UI settings: provider openai_compatible (needs spe_agent_base_url) or
-      anthropic (currently only claude-haiku-5-5, a spend guard; see agent/README.md to
-      change it); tool surface shell; positive limits and output cap; two distinct free ports.
+      anthropic; spe_agent_model must be one of spe_agent_allowed_models when that list is
+      set; tool surface shell; positive limits and output cap; two distinct free ports.
 
 - name: LLM key present
   ansible.builtin.assert:
     that: (spe_agent_llm_key | default('', true) | trim | length) > 0
     fail_msg: >-
-      The agent's LLM key is empty. For openai_compatible export DENBI_LLM_API_KEY (as for
-      openwebui); for anthropic export ANTHROPIC_API_KEY on the controller, e.g.
-      set -a; . ~/.config/spe-dev/llm.env; set +a. Never commit it.
+      The agent's LLM key is empty. Export SPE_LLM_API_KEY on the controller (any
+      provider), or DENBI_LLM_API_KEY (openai_compatible) / ANTHROPIC_API_KEY (anthropic).
+      Never commit it.
     quiet: true
 
 - name: Sandbox image (open-terminal with the SPE CA and runbook)
@@ -107,7 +107,8 @@
     agui_agent_config:
       model: >-
         {{ {'provider': spe_agent_model_provider, 'name': spe_agent_model}
-           | combine({'base_url': spe_agent_base_url} if spe_agent_model_provider == 'openai_compatible' else {}) }}
+           | combine({'base_url': spe_agent_base_url} if spe_agent_model_provider == 'openai_compatible' else {})
+           | combine({'allowed_models': spe_agent_allowed_models} if spe_agent_allowed_models | length > 0 else {}) }}
       prompt:
         file: /etc/spe-agent/system_prompt.txt
         include_sandbox_prompt: "{{ spe_agent_include_sandbox_prompt | bool }}"

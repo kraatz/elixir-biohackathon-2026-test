@@ -38,12 +38,32 @@ def test_typed_surface_is_reserved(tmp_path):
         load_config(write(tmp_path, data))
 
 
-def test_anthropic_only_haiku(tmp_path):
-    ok = {**VALID, "model": {"provider": "anthropic", "name": "claude-haiku-5-5"}}
-    assert load_config(write(tmp_path, ok)).model.name == "claude-haiku-5-5"
-    bad = {**VALID, "model": {"provider": "anthropic", "name": "claude-opus-5"}}
-    with pytest.raises(ConfigError, match="claude-haiku-5-5"):
-        load_config(write(tmp_path, bad))
+def test_any_anthropic_model_without_a_guard(tmp_path):
+    data = {**VALID, "model": {"provider": "anthropic", "name": "claude-opus-5"}}
+    cfg = load_config(write(tmp_path, data))
+    assert cfg.model.name == "claude-opus-5" and cfg.model.allowed_models is None
+
+
+@pytest.mark.parametrize("model", [
+    {"provider": "anthropic", "name": "claude-opus-5"},
+    {"provider": "openai_compatible", "name": "gpt-big", "base_url": "https://llm.example/v1"},
+])
+def test_allowed_models_rejects_others_for_any_provider(tmp_path, model):
+    data = {**VALID, "model": {**model, "allowed_models": ["claude-haiku-5-5", "qwen3.8-27b"]}}
+    with pytest.raises(ConfigError, match="allowed_models"):
+        load_config(write(tmp_path, data))
+
+
+def test_allowed_models_accepts_a_listed_model(tmp_path):
+    data = {**VALID, "model": {"provider": "anthropic", "name": "claude-haiku-5-5",
+                               "allowed_models": ["claude-haiku-5-5"]}}
+    assert load_config(write(tmp_path, data)).model.name == "claude-haiku-5-5"
+
+
+def test_empty_allowed_models_is_an_error(tmp_path):
+    data = {**VALID, "model": {**VALID["model"], "allowed_models": []}}
+    with pytest.raises(ConfigError, match="allowed_models"):
+        load_config(write(tmp_path, data))
 
 
 def test_openai_compatible_needs_base_url(tmp_path):

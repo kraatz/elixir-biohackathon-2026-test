@@ -210,11 +210,11 @@ The role copies only the files git tracks under `agent/` and `chat-ui/` to
 `spe_frontend_dir/build/` and builds `spe-agent:<hash>` and `spe-chat-ui:<hash>`
 from them (the hash covers the build context, so unchanged sources do not
 rebuild). Model: `spe_agent_model_provider: openai_compatible` with
-`spe_agent_base_url` (default: the de.NBI endpoint, as Open WebUI) and its key in
-`DENBI_LLM_API_KEY`, which works with any OpenAI-compatible API; or `anthropic` with
-`ANTHROPIC_API_KEY` exported on the controller. With `anthropic` the agent currently
-accepts only `claude-haiku-5-5`, a spend guard from our development VM (see
-`agent/README.md` to change it or to add another vendor).
+`spe_agent_base_url` (default: the de.NBI endpoint, as Open WebUI), which works with any
+OpenAI-compatible API; or `anthropic`. The key comes from `SPE_LLM_API_KEY` on the
+controller (or, as before, `DENBI_LLM_API_KEY` / `ANTHROPIC_API_KEY`). Optionally,
+`spe_agent_allowed_models` restricts the accepted model names (our development VM pins
+`claude-haiku-5-5` this way); empty by default. Another vendor: see `agent/README.md`.
 
 Checks after deployment and in `verify.yml`, none of which calls the model:
 health, UI, 401 without or with a wrong key, and the key boundary — through the

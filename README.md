@@ -96,13 +96,12 @@ model name works with any OpenAI-compatible API (the de.NBI endpoint, OpenAI, vL
 Ollama, LiteLLM and similar gateways); `anthropic` uses Anthropic's API. The two
 setups we have run are examples, not requirements: our de.NBI instance uses the
 de.NBI endpoint with `qwen3.8-27b`, and our own development VM uses Anthropic with
-`claude-haiku-5-5`, chosen there to keep test spend low. One caveat: that choice is
-also enforced in code today — with `anthropic`, the agent accepts only
-`claude-haiku-5-5` (`ANTHROPIC_MODELS` in `agent/src/spe_agent/config.py`, and the
-check in `ansible/roles/agui/tasks/main.yml`). A setup that wants another Anthropic
-model changes those two places. Other vendors Pydantic AI supports (Google, Bedrock,
-Mistral, Groq, …) need a small addition to the agent's configuration; see
-`agent/README.md`.
+`claude-haiku-5-5`, chosen there to keep test spend low and pinned with the optional
+guard `spe_agent_allowed_models: [claude-haiku-5-5]` in that VM's instance file. The
+guard is off by default, so other setups use whatever model they name. The key comes
+from `SPE_LLM_API_KEY` on the controller, whatever the provider. Other vendors Pydantic
+AI supports (Google, Bedrock, Mistral, Groq, …) need a small addition to the agent's
+configuration; see `agent/README.md`.
 
 **One turn, end to end.** The browser sends the conversation to the chat UI's
 runtime route, which forwards it over AG-UI with the bearer key. The agent sends it

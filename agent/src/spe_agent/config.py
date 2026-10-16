@@ -9,9 +9,6 @@ import yaml
 from pydantic import BaseModel, ConfigDict, PositiveInt, ValidationError, model_validator
 from pydantic_ai.usage import UsageLimits
 
-ANTHROPIC_MODELS = frozenset({"claude-haiku-5-5"})
-
-
 class ConfigError(Exception):
     pass
 
@@ -24,11 +21,18 @@ class ModelCfg(_Strict):
     provider: Literal["openai_compatible", "anthropic"] = "openai_compatible"
     name: str
     base_url: str | None = None
+    # Optional guard, for any provider: when set, only these model names are accepted, so a
+    # typo cannot select a pricier model (the development VM pins claude-haiku-5-5 this way).
+    allowed_models: list[str] | None = None
 
     @model_validator(mode="after")
     def _check(self) -> "ModelCfg":
-        if self.provider == "anthropic" and self.name not in ANTHROPIC_MODELS:
-            raise ValueError(f"anthropic provider: only {', '.join(sorted(ANTHROPIC_MODELS))} is allowed, got {self.name}")
+        if self.allowed_models is not None:
+            if not self.allowed_models:
+                raise ValueError("model.allowed_models is empty: leave it out to allow any model")
+            if self.name not in self.allowed_models:
+                raise ValueError(f"model.name {self.name!r} is not in model.allowed_models "
+                                 f"({', '.join(self.allowed_models)})")
         if self.provider == "openai_compatible" and not self.base_url:
             raise ValueError("openai_compatible provider needs model.base_url")
         return self

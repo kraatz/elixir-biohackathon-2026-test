@@ -32,18 +32,16 @@ sandbox does not offer keeps the service at 503 with that reason.
 
 **Configuration.** `agent.yaml` (`SPE_AGENT_CONFIG`, default
 `/etc/spe-agent/agent.yaml`), validated at startup; unknown keys, `surface: typed`,
-non-positive limits or caps and a missing prompt file stop the process with exit 2,
-and so does an Anthropic model other than `claude-haiku-5-5` (see *Providers* below). Keys come from the environment
+non-positive limits or caps, a missing prompt file and a model outside
+`model.allowed_models` (when set) stop the process with exit 2. Keys come from the environment
 only: `SPE_AGENT_API_KEY`, `SANDBOX_API_KEY`, and `OPENAI_API_KEY` or
 `ANTHROPIC_API_KEY` by provider.
 
 **Providers.** `model.provider` is `openai_compatible` (any OpenAI-compatible API:
 `model.base_url` plus `model.name`, key in `OPENAI_API_KEY`) or `anthropic` (key in
-`ANTHROPIC_API_KEY`). The `anthropic` provider accepts only `claude-haiku-5-5`
-(`ANTHROPIC_MODELS` in `config.py`): a spend guard added for this repository's
-development VM, which runs on Anthropic, not a requirement of the design. To allow other
-Anthropic models, extend `ANTHROPIC_MODELS` and the matching check in
-`ansible/roles/agui/tasks/main.yml`. To add a vendor Pydantic AI supports natively
+`ANTHROPIC_API_KEY`). Any model name is accepted unless `model.allowed_models` lists the
+permitted ones (Ansible: `spe_agent_allowed_models`): an optional spend guard, used by
+this repository's development VM to pin `claude-haiku-5-5`. To add a vendor Pydantic AI supports natively
 (Google, Bedrock, Mistral, Groq, …): add it to `ModelCfg.provider` and its key variable
 in `load_secrets` (`config.py`), build its model in `build_model` (`agent.py`), add the
 extra to `pydantic-ai-slim[...]` in `pyproject.toml`, and allow it in the role's check and
