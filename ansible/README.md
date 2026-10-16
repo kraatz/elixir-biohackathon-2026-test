@@ -224,6 +224,53 @@ create, a second converge without rebuilds or restarts, `verify.yml`, and switch
 to Open WebUI and back; then, with the model, the smoke run (`-e spe_agui_smoke=true`) and a
 two-turn chat in the browser, both passing.
 
+### On an existing de.NBI VM
+
+Deployed 2026-10-16 on `agent-service-1` (Ubuntu 26.04, 8 CPUs, 15 GB RAM) beside the
+Open WebUI stack already running there (`agent-stack`, `127.0.0.1:8081`), which was left
+untouched: its containers kept running, `daemon.json` did not change. Template:
+`instances/denbi.example.yml`; the private copy set:
+
+- `spe_existing_host: agent-service-1` with `spe_existing_ssh_args: "-F /home/agentvm/.ssh/config"`
+  (the jump host), and `spe_existing_api_ip` = the VM's own interface address
+  (`hostname -I`, `10.0.2.245`), not its `10.57.204.x` address on the jump network;
+- `spe_manage_docker: false`: Docker there also runs `agent-stack`, and `base` would
+  otherwise restart it;
+- `spe_data_root: /srv/spe-data`: `/data-share` on that VM is the mounted Manila share
+  with the real dataset, and the preflight rightly refuses it. Workflows still see
+  their data at `/data-share` inside the WESkit containers, mapped from `spe_data_root`;
+- the dummy dataset from the controller (rsync through the jump host);
+- `openai_compatible` with `qwen3.8-27b` and `DENBI_LLM_API_KEY`, the key Open WebUI's
+  `agent-stack/webui.env` already uses on that VM.
+
+```bash
+export DENBI_LLM_API_KEY=...                       # never in the repository
+ansible-playbook playbooks/create.yml -e @instances/<copy>.yml </dev/null
+ansible-playbook playbooks/verify.yml -e @instances/<copy>.yml -e spe_agui_smoke=true </dev/null
+ssh -F ~/.ssh/config ubuntu@agent-service-1 -N -L 3000:127.0.0.1:3000 -L 8100:127.0.0.1:8100
+# then http://localhost:3000; the agent key is output/<instance>/agent_api_key
+# logs:     ssh … 'docker compose -p spe-frontend logs agent'
+# run log:  ssh … 'docker compose -p spe-frontend exec agent cat /var/lib/spe-agent/runs.jsonl'  (private)
+# restart:  ssh … 'docker compose -p spe-frontend restart'
+# reset:    ansible-playbook playbooks/destroy.yml -e @instances/<copy>.yml -e spe_confirm_reset=<instance>
+```
+
+Observed: create `failed=0` with the WES smoke run `COMPLETE`; the second converge
+changed nothing in the sandbox, agui or compose tasks; the no-cost checks passed (health,
+UI, 401s, key boundary); with the model, the AG-UI smoke run, a two-turn chat in the
+browser through the tunnel, and the promptfoo starter suite (3/3) passed. qwen's
+reasoning appears in the chat as a "Thought" block and occasionally as a stray line
+before the answer. Results with `qwen3.8-27b` are not comparable with the Anthropic
+results on the development VM.
+
+The images use about 12 GB on that VM: free space fell from 21 GB to 9 GB, below the
+default `spe_min_free_gb: 15`, so later converges there need
+`-e spe_min_free_gb=5` (the preflight checks free space on every run). Docker's build
+cache was not pruned; it is shared with `agent-stack`.
+
+`spe-ga4gh-api` was not usable: it refuses the de.NBI key (the jump host accepts it).
+`spe-ga4gh-api-2` is the controller with a hand-run stack and is not a target.
+
 ## Not covered yet
 
 - A reverse proxy to reach several instances' frontends at once (planned; for

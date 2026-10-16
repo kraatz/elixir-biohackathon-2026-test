@@ -54,8 +54,8 @@ Update it as tasks finish, and commit it with the work.
 
 State (2026-10-15, second session):
 
-- Done: Tasks 1–11, including their paid checks (smoke, two-turn chat, promptfoo 3/3); Task 12 step 1 (`instances/denbi.example.yml`); Task 13 spec reconciliation (spec §12).
-- Pending, operator: the de.NBI target, its deployment and documentation (Task 12 steps 2–5).
+- Done: Tasks 1–12, including the model-backed checks on the dev VM and on de.NBI; Task 13 spec reconciliation (spec §12).
+- Task 12 done: instance `denbi-agui-01` runs on de.NBI `agent-service-1` (private instance file and output only in this worktree). Converging there needs `-e spe_min_free_gb=5` until disk is freed.
 - The dev VM runs `dev-local` with `spe_frontend: agui` (Anthropic `claude-haiku-5-5`, smoke off).
 
 **To resume**, start a session in the worktree
