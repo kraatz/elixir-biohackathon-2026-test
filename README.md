@@ -77,6 +77,7 @@ flowchart TB
   owui -. "tool calls, sandbox key" .-> sandbox
 
   classDef alt stroke-dasharray: 6 4, fill:#f4f4f4, color:#555
+  linkStyle 13,14,15 stroke-dasharray: 6 4
 ```
 
 Dashed: **Open WebUI**, the previous design. It is still available as an alternative
