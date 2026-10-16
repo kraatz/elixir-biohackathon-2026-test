@@ -21,7 +21,8 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
-from pydantic_ai.ui.ag_ui import AGUIAdapter
+from pydantic_ai.messages import ToolCallPart
+from pydantic_ai.ui.ag_ui import AGUIAdapter, AGUIEventStream
 
 from .agent import RunDeps, build_agent, build_model, compose_prompt
 from .config import Config, ConfigError, Secrets
@@ -31,6 +32,36 @@ from .sandbox import SandboxClient, SandboxUnavailable, build_tools, operations_
 log = logging.getLogger("spe_agent")
 
 MAX_ERROR_CHARS = 500
+
+
+class _EventStream(AGUIEventStream):
+    """Ends tool calls when the model response ends, not when the next part starts.
+
+    pydantic-ai ends a part as soon as another one starts, but an OpenAI-compatible stream (vLLM
+    with qwen) can send a content chunk between a tool call's argument chunks. The arguments that
+    follow then come after the call's TOOL_CALL_END, and the AG-UI client rejects them ("No active
+    tool call found"). AG-UI lets a text message and tool calls be open at once, so the ends wait.
+    """
+
+    _pending_ends: list[ToolCallPart] | None = None
+
+    async def handle_tool_call_end(self, part: ToolCallPart) -> AsyncIterator[BaseEvent]:
+        self._pending_ends = [*(self._pending_ends or []), part]
+        return
+        yield
+
+    async def after_response(self) -> AsyncIterator[BaseEvent]:
+        async for event in super().after_response():
+            yield event
+        pending, self._pending_ends = self._pending_ends or [], None
+        for part in pending:
+            async for event in super().handle_tool_call_end(part):
+                yield event
+
+
+class _Adapter(AGUIAdapter):
+    def build_event_stream(self) -> _EventStream:
+        return _EventStream(self.run_input, accept=self.accept, ag_ui_version=self.ag_ui_version)
 
 
 @dataclass(frozen=True)
@@ -121,9 +152,9 @@ class Service:
         ready = self.ready
         if ready is None:
             raise RuntimeError("agent not ready")
-        return self._events(AGUIAdapter(agent=ready.agent, run_input=run_input, accept=accept))
+        return self._events(_Adapter(agent=ready.agent, run_input=run_input, accept=accept))
 
-    async def _events(self, adapter: AGUIAdapter) -> AsyncIterator[BaseEvent]:
+    async def _events(self, adapter: _Adapter) -> AsyncIterator[BaseEvent]:
         run_input = adapter.run_input
         recorder = RunRecorder(run_input)
 
@@ -185,7 +216,7 @@ def create_app(config: Config, secrets: Secrets, model_override: Model | None = 
         if ready is None:
             return JSONResponse({"detail": f"agent not ready: {service.reason}"}, status_code=503)
         try:
-            adapter = await AGUIAdapter.from_request(request, agent=ready.agent)
+            adapter = await _Adapter.from_request(request, agent=ready.agent)
         except ValidationError as e:
             errors = e.errors(include_url=False, include_input=False, include_context=False)
             return JSONResponse({"detail": errors}, status_code=422)

@@ -223,6 +223,46 @@ async def test_stream_has_tool_call_text_and_one_terminal_event(tmp_path):
     assert "ran ls" in result["content"]
 
 
+def tool_call_violations(evs) -> list[str]:
+    """What the @ag-ui/client event verifier rejects: tool call events outside START..END."""
+    open_calls, bad = set(), []
+    for e in evs:
+        t, tid = e["type"], e.get("toolCallId")
+        if t == "TOOL_CALL_START":
+            if tid in open_calls:
+                bad.append(f"{t} {tid} already open")
+            open_calls.add(tid)
+        elif t in ("TOOL_CALL_ARGS", "TOOL_CALL_END"):
+            if tid not in open_calls:
+                bad.append(f"{t} {tid} not open")
+            if t == "TOOL_CALL_END":
+                open_calls.discard(tid)
+    return bad
+
+
+async def test_text_inside_a_tool_call_keeps_the_call_open(tmp_path):
+    # vLLM streams content chunks (e.g. "\n") between a call's argument chunks; pydantic-ai ends
+    # the call when the text part starts, so the remaining arguments followed its TOOL_CALL_END.
+    async def stream(messages, info):
+        if isinstance(messages[-1].parts[-1], ToolReturnPart):
+            yield "done"
+            return
+        yield {0: DeltaToolCall(name="run_command", json_args='{"command":', tool_call_id="chatcmpl-tool-1")}
+        yield "\n"
+        yield {0: DeltaToolCall(json_args=' "ls"}')}
+
+    app, sandbox = build(tmp_path, model=FunctionModel(stream_function=stream))
+    async with running(app) as c:
+        await until_status(c, 200)
+        evs = await post_run(c)
+    assert tool_call_violations(evs) == []
+    args = "".join(e["delta"] for e in evs if e["type"] == "TOOL_CALL_ARGS")
+    assert json.loads(args) == {"command": "ls"}
+    assert terminal(evs) == ["RUN_FINISHED"]
+    (call,) = sandbox.calls
+    assert json.loads(call.content)["command"] == "ls"
+
+
 async def test_tool_call_reaches_sandbox_with_its_key_and_thread(tmp_path):
     app, sandbox = build(tmp_path)
     async with running(app) as c:
