@@ -61,6 +61,11 @@ flowchart TB
 
   llm["LLM endpoint<br/>any OpenAI-compatible API,<br/>or Anthropic"]
 
+  %% Open WebUI's links first, so linkStyle 0,1,2 targets them in every Mermaid version.
+  browser -. "SSH tunnel" .-> owui
+  owui -. "LLM key" .-> llm
+  owui -. "tool calls, sandbox key" .-> sandbox
+
   ansible -- "SSH (jump host)" --> vm
   ansible --> output
   browser -- "SSH tunnel" --> ui
@@ -72,12 +77,8 @@ flowchart TB
   traefik --> wes & drs & trs
   wes & drs --- data
 
-  browser -. "SSH tunnel" .-> owui
-  owui -. "LLM key" .-> llm
-  owui -. "tool calls, sandbox key" .-> sandbox
-
   classDef alt stroke-dasharray: 6 4, fill:#f4f4f4, color:#555
-  linkStyle 13,14,15 stroke-dasharray: 6 4
+  linkStyle 0,1,2 stroke-dasharray: 6 4
 ```
 
 Dashed: **Open WebUI**, the previous design. It is still available as an alternative
