@@ -1,0 +1,7 @@
+node_modules/
+reports/
+.promptfoo/
+.venv/
+__pycache__/
+.pytest_cache/
+*.env

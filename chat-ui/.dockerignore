@@ -1,0 +1,6 @@
+*
+!package.json
+!package-lock.json
+!next.config.mjs
+!tsconfig.json
+!app/

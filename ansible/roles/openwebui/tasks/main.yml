@@ -14,35 +14,9 @@
       export DENBI_LLM_API_KEY=$(grep '^OPENAI_API_KEY=' ~/agent-stack/webui.env | cut -d= -f2-)
       or pass -e spe_denbi_api_key=... (do not commit it to the repo).
 
-- name: Frontend directory
-  ansible.builtin.file:
-    path: "{{ spe_frontend_dir }}"
-    state: directory
-    owner: "{{ spe_ssh_user }}"
-    group: "{{ spe_ssh_user }}"
-    mode: "0750"
-
-- name: Build-context files (Dockerfile, agent runbook)
-  ansible.builtin.copy:
-    src: "{{ item }}"
-    dest: "{{ spe_frontend_dir }}/{{ item }}"
-    owner: "{{ spe_ssh_user }}"
-    group: "{{ spe_ssh_user }}"
-    mode: "0644"
-  loop:
-    - Dockerfile.terminal
-    - AGENTS.md
-  register: ctx_files
-
-- name: SPE trust anchor into the build context
-  ansible.builtin.copy:
-    src: "{{ spe_stack_dir }}/deployment/certs/traefik.crt"
-    dest: "{{ spe_frontend_dir }}/spe-ca.crt"
-    remote_src: true
-    owner: "{{ spe_ssh_user }}"
-    group: "{{ spe_ssh_user }}"
-    mode: "0644"
-  register: ca_file
+- name: Sandbox image (open-terminal with the SPE CA and runbook)
+  ansible.builtin.include_role:
+    name: sandbox
 
 - name: Rendered compose and env files
   ansible.builtin.template:
@@ -60,17 +34,6 @@
   no_log: true
   register: rendered
 
-- name: Build the open-terminal image with the SPE CA
-  community.docker.docker_image:
-    name: "{{ spe_frontend_terminal_image }}"
-    build:
-      path: "{{ spe_frontend_dir }}"
-      dockerfile: Dockerfile.terminal
-      pull: false
-    source: build
-    force_source: "{{ ctx_files.changed or ca_file.changed }}"
-  register: term_build
-
 - name: Validate compose file
   ansible.builtin.command: docker compose -f docker-compose.yml config --quiet
   args:
@@ -82,7 +45,9 @@
     project_src: "{{ spe_frontend_dir }}"
     files: [docker-compose.yml]
     state: present
-    recreate: "{{ 'always' if (rendered.changed or term_build.changed) else 'auto' }}"
+    # Same project as the agui role: switching frontends removes the other's containers.
+    remove_orphans: true
+    recreate: "{{ 'always' if (rendered.changed or sandbox_image_changed) else 'auto' }}"
 
 - name: Wait for OpenWebUI to answer
   ansible.builtin.uri:
@@ -106,7 +71,7 @@
       name: "{{ spe_webui_admin_name }}"
       email: "{{ spe_webui_admin_email }}"
       password: "{{ spe_webui_admin_password }}"
-    status_code: [200, 400]   # 400 = account already exists (idempotent re-run)
+    status_code: [200, 400, 403]   # 400/403 = account exists or signup closed (re-run); sign-in below checks it
   register: webui_signup
   changed_when: webui_signup.status == 200
   no_log: true
@@ -138,7 +103,7 @@
           name: "{{ spe_webui_model_id }}"
           meta: {}
           params:
-            system: "{{ lookup('ansible.builtin.file', 'system_prompt.txt') }}"
+            system: "{{ lookup('ansible.builtin.file', role_path ~ '/../sandbox/files/system_prompt.txt') }}"
           is_active: true
     status_code: 200
   register: webui_model

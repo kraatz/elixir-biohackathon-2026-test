@@ -1,0 +1,39 @@
+---
+# Runs on the controller: register a VM that already exists instead of
+# creating one. Nothing in OpenStack is touched.
+- name: Existing-host parameters present
+  ansible.builtin.assert:
+    that:
+      - spe_existing_host is string and spe_existing_host | length > 0
+      - spe_existing_api_ip is string and spe_existing_api_ip | length > 0
+    fail_msg: >-
+      spe_provision is 'existing': set spe_existing_host (SSH target or localhost)
+      and spe_existing_api_ip (the VM's own IPv4 address) in the instance file.
+
+- name: spe_existing_api_ip is an IPv4 address
+  ansible.builtin.command:
+    argv: [python3, -c, "import ipaddress, sys; ipaddress.IPv4Address(sys.argv[1])", "{{ spe_existing_api_ip }}"]
+  changed_when: false
+  register: spe_ip_check
+  failed_when: spe_ip_check.rc != 0
+  delegate_to: localhost
+
+- name: Output directory
+  ansible.builtin.file:
+    path: "{{ spe_output_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Register the existing host
+  ansible.builtin.add_host:
+    name: "{{ spe_instance }}-api"
+    groups: spe_api
+    ansible_host: "{{ spe_existing_host }}"
+    ansible_connection: "{{ 'local' if spe_existing_host in ['localhost', '127.0.0.1'] else 'ssh' }}"
+    ansible_user: "{{ spe_ssh_user }}"
+    ansible_ssh_private_key_file: "{{ spe_existing_ssh_key | default(omit, true) }}"
+    ansible_ssh_common_args: "{{ spe_existing_ssh_args }}"
+    ansible_python_interpreter: /usr/bin/python3
+    spe_api_host: "{{ spe_existing_api_ip }}"
+    spe_floating_ip: ""
+  changed_when: false

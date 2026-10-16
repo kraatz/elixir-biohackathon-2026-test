@@ -1,0 +1,49 @@
+---
+# The agent's sandbox: the open-terminal image with this instance's own CA,
+# the WES/DRS/TRS runbook and the system prompt. Shared by the openwebui and
+# agui frontends; runs after the workflow stack so the CA exists.
+- name: Frontend directory
+  ansible.builtin.file:
+    path: "{{ spe_frontend_dir }}"
+    state: directory
+    owner: "{{ spe_ssh_user }}"
+    group: "{{ spe_ssh_user }}"
+    mode: "0750"
+
+- name: Build-context files (Dockerfile, agent runbook) and system prompt
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ spe_frontend_dir }}/{{ item }}"
+    owner: "{{ spe_ssh_user }}"
+    group: "{{ spe_ssh_user }}"
+    mode: "0644"
+  loop:
+    - Dockerfile.terminal
+    - AGENTS.md
+    - system_prompt.txt
+  register: sandbox_ctx_files
+
+- name: SPE trust anchor into the build context
+  ansible.builtin.copy:
+    src: "{{ spe_stack_dir }}/deployment/certs/traefik.crt"
+    dest: "{{ spe_frontend_dir }}/spe-ca.crt"
+    remote_src: true
+    owner: "{{ spe_ssh_user }}"
+    group: "{{ spe_ssh_user }}"
+    mode: "0644"
+  register: sandbox_ca_file
+
+- name: Build the open-terminal image with the SPE CA
+  community.docker.docker_image:
+    name: "{{ spe_frontend_terminal_image }}"
+    build:
+      path: "{{ spe_frontend_dir }}"
+      dockerfile: Dockerfile.terminal
+      pull: false
+    source: build
+    force_source: "{{ sandbox_ctx_files.changed or sandbox_ca_file.changed }}"
+  register: sandbox_build
+
+- name: Sandbox image changed
+  ansible.builtin.set_fact:
+    sandbox_image_changed: "{{ sandbox_build.changed }}"

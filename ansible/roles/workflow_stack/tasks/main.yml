@@ -175,6 +175,12 @@
     files: [compose.install.yaml]
     state: present
     recreate: "{{ 'always' if rendered.changed or (cert.changed | default(false)) else 'auto' }}"
+  register: stack_up
+  # weskit-data-init is one-shot (restart: 'no'): every up starts it again and
+  # compose reports that as a change. Its copy and chown are idempotent, so only
+  # actions on the other services count.
+  changed_when: >-
+    stack_up.actions | default([]) | rejectattr('id', 'search', '-weskit-data-init-') | list | length > 0
 
 - name: Wait for the three APIs
   ansible.builtin.uri:
