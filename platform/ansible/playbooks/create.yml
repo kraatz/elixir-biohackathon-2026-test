@@ -87,5 +87,6 @@
     - { role: trs_install, tags: [trs] }
     - { role: openwebui, tags: [frontend], when: "spe_frontend == 'openwebui'" }
     - { role: agui, tags: [frontend], when: "spe_frontend == 'agui'" }
+    - { role: coder_agent, become: true, tags: [coder], when: "spe_coder_agent_token is defined" }
     - { role: handoff, tags: [handoff] }
     - { role: verify, tags: [verify] }

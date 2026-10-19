@@ -1,0 +1,28 @@
+# Fallback if Caddy refuses to request the wildcard certificate (it may insist
+# on a DNS challenge for "*." names, which the Charité DNS does not offer).
+# Then every hostname gets its own certificate via HTTP-01 when it is first
+# used; the "ask" check only allows names under the portal zone.
+{
+	email you@bih-charite.de
+	acme_ca https://ACME-DIRECTORY-URL-FROM-PKI
+	acme_eab {
+		key_id KEY-ID-FROM-PKI
+		mac_key HMAC-KEY-FROM-PKI
+	}
+	on_demand_tls {
+		ask http://127.0.0.1:5555/check
+	}
+}
+
+http://127.0.0.1:5555 {
+	@allowed expression `{query.domain} == "sperange.example.org" || {query.domain}.endsWith(".sperange.example.org")`
+	respond @allowed 200
+	respond 404
+}
+
+https:// {
+	tls {
+		on_demand
+	}
+	reverse_proxy 127.0.0.1:7080
+}

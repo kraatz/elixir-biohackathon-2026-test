@@ -1,0 +1,10 @@
+# /etc/systemd/system/sperange-sync.service
+[Unit]
+Description=Pull the sperange repo and push the Coder template if it changed
+After=coder.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+EnvironmentFile=/etc/sperange/sync.env
+ExecStart=/home/ubuntu/sperange/coder/deploy/sync-template.sh

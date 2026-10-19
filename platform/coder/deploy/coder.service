@@ -1,0 +1,18 @@
+# /etc/systemd/system/coder.service
+[Unit]
+Description=Coder (sperange portal)
+After=network-online.target remote-fs.target
+Wants=network-online.target
+RequiresMountsFor=/data-share
+
+[Service]
+User=ubuntu
+EnvironmentFile=/etc/sperange/coder.env
+ExecStart=/usr/local/bin/coder server
+Restart=on-failure
+RestartSec=5
+# Workspace builds run Ansible for ~10 min; let them finish on restart.
+TimeoutStopSec=900
+
+[Install]
+WantedBy=multi-user.target

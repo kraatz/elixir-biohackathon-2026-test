@@ -1,0 +1,61 @@
+---
+# Install the Coder workspace agent when the instance is created from the Coder
+# portal (coder/template). The agent dials out to the Coder server, which then
+# proxies the OpenWebUI app to the browser; no inbound port is opened. Skipped
+# when spe_coder_agent_token is unset, i.e. for plain ansible-playbook runs.
+- name: Agent directory
+  ansible.builtin.file:
+    path: /opt/coder-agent
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Agent init script (downloads the agent binary from the Coder server)
+  ansible.builtin.copy:
+    content: "{{ spe_coder_init_script }}"
+    dest: /opt/coder-agent/init.sh
+    owner: root
+    group: root
+    mode: "0755"
+  register: init_script
+
+- name: Agent token
+  ansible.builtin.copy:
+    content: "CODER_AGENT_TOKEN={{ spe_coder_agent_token }}\n"
+    dest: /opt/coder-agent/env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  register: agent_env
+
+- name: Agent unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/coder-agent.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Coder workspace agent
+      After=network-online.target docker.service
+      Wants=network-online.target
+
+      [Service]
+      User={{ spe_ssh_user }}
+      EnvironmentFile=/opt/coder-agent/env
+      ExecStart=/opt/coder-agent/init.sh
+      Restart=always
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+  register: agent_unit
+
+- name: Agent running
+  ansible.builtin.systemd_service:
+    name: coder-agent
+    enabled: true
+    daemon_reload: true
+    state: "{{ 'restarted' if (init_script.changed or agent_env.changed or agent_unit.changed) else 'started' }}"

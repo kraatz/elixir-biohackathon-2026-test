@@ -6,6 +6,11 @@
 #              -e spe_confirm_reset=<instance>; see roles/existing_host/files/spe_preflight.py
 #              (reset mode) for what is checked before anything is removed.
 #   ansible-playbook playbooks/destroy.yml -e @instances/<name>.yml
+# The run (chats, report, parameters) is archived first; if that fails nothing
+# is deleted or reset. -e spe_archive_skip=true destroys without archiving.
+- name: Archive the run
+  ansible.builtin.import_playbook: archive.yml
+
 - name: Destroy SPE instance
   hosts: localhost
   gather_facts: false

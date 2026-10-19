@@ -11,9 +11,13 @@ services:
     env_file: webui.env
     environment:
       ENABLE_OLLAMA_API: "false"
-      ENABLE_SIGNUP: "true"
+      WEBUI_AUTH: "{{ 'true' if spe_webui_auth else 'false' }}"
+      ENABLE_SIGNUP: "{{ 'true' if spe_webui_auth else 'false' }}"
       DEFAULT_USER_ROLE: pending
       ENABLE_CODE_INTERPRETER: "false"
+      # Tags are set by hand as outcome labels (see reports/run_report.md.j2);
+      # LLM-generated tags would mix with them.
+      ENABLE_TAGS_GENERATION: "false"
       ENABLE_CODE_EXECUTION: "false"
       AIOHTTP_CLIENT_STREAM_IDLE_TIMEOUT: "120"
       # Wires the open-terminal tool server in on first boot (fresh data volume).

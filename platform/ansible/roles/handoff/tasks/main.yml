@@ -110,10 +110,10 @@
       {{ {'ssh_target': spe_existing_host, 'ssh_key': spe_existing_ssh_key | default('', true), 'ssh_args': spe_existing_ssh_args}
          if spe_provision == 'existing' else {'ssh_key': spe_output_dir ~ '/ssh_key'} }}
     spe_handoff_frontend: >-
-      {{ {'webui_url': 'http://127.0.0.1:' ~ spe_webui_local_port,
-          'webui_tunnel': (spe_ssh_prefix ~ ' -N -L ' ~ spe_webui_local_port ~ ':127.0.0.1:' ~ spe_webui_local_port) if spe_ssh_prefix else '',
-          'webui_admin_user': spe_webui_admin_email,
-          'webui_admin_password': spe_webui_admin_password}
+      {{ ({'webui_url': 'http://127.0.0.1:' ~ spe_webui_local_port,
+           'webui_tunnel': (spe_ssh_prefix ~ ' -N -L ' ~ spe_webui_local_port ~ ':127.0.0.1:' ~ spe_webui_local_port) if spe_ssh_prefix else '',
+           'webui_auth': spe_webui_auth}
+          | combine({'webui_admin_user': spe_webui_admin_email, 'webui_admin_password': spe_webui_admin_password} if spe_webui_auth else {}))
          if spe_frontend == 'openwebui' else {} }}
     spe_handoff_agui: >-
       {{ {'ui_url': 'http://127.0.0.1:' ~ spe_agui_ui_port,

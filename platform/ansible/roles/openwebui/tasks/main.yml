@@ -60,8 +60,11 @@
   changed_when: false
 
 # The agent system prompt is a per-user setting in OpenWebUI, so it cannot be
-# pre-seeded before anyone signs up. Instead the admin account is created up
-# front and the prompt is attached to the model, where it applies to every chat.
+# pre-seeded before anyone signs up. Instead the prompt is attached to the
+# model, where it applies to every chat. That needs an admin token: with
+# spe_webui_auth the admin account is created up front; without it (WEBUI_AUTH
+# false) the sign-in call itself creates and returns OpenWebUI's single
+# admin@localhost user, whatever credentials are sent.
 - name: Create the OpenWebUI admin (first account becomes admin)
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ spe_webui_local_port }}/api/v1/auths/signup"
@@ -74,6 +77,7 @@
     status_code: [200, 400, 403]   # 400/403 = account exists or signup closed (re-run); sign-in below checks it
   register: webui_signup
   changed_when: webui_signup.status == 200
+  when: spe_webui_auth
   no_log: true
 
 - name: Sign in as the OpenWebUI admin
@@ -108,4 +112,72 @@
     status_code: 200
   register: webui_model
   changed_when: webui_model.status == 200
+  no_log: true
+
+# Run report: the template lives in reports/ so it is versioned with the repo.
+# Rendered here and created once as a pinned OpenWebUI note; an existing note
+# with the same title is left alone so a re-run never overwrites a report.
+- name: Run report (rendered template)
+  ansible.builtin.template:
+    src: "{{ spe_report_template }}"
+    dest: "{{ spe_frontend_dir }}/run_report.md"
+    owner: "{{ spe_ssh_user }}"
+    group: "{{ spe_ssh_user }}"
+    mode: "0644"
+  register: report_md
+
+- name: Run report as HTML (the note editor loads HTML; OpenWebUI ships a Markdown renderer)
+  ansible.builtin.shell: >-
+    docker compose exec -T open-webui python -c
+    "import sys, markdown; sys.stdout.write(markdown.markdown(sys.stdin.read(), extensions=['tables']))"
+    < run_report.md
+  args:
+    chdir: "{{ spe_frontend_dir }}"
+  register: report_html
+  changed_when: false
+
+- name: Run report as Markdown
+  ansible.builtin.slurp:
+    src: "{{ spe_frontend_dir }}/run_report.md"
+  register: report_md_file
+
+- name: Existing notes
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ spe_webui_local_port }}/api/v1/notes/"
+    headers:
+      Authorization: "Bearer {{ webui_signin.json.token }}"
+    status_code: 200
+  register: webui_notes
+  no_log: true
+
+- name: Create the run report note
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ spe_webui_local_port }}/api/v1/notes/create"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ webui_signin.json.token }}"
+    body_format: json
+    body:
+      title: "{{ spe_report_title }}"
+      data:
+        content:
+          json: null
+          md: "{{ report_md_file.content | b64decode }}"
+          html: "{{ report_html.stdout }}"
+      meta: null
+      access_grants: []
+    status_code: 200
+  register: report_note
+  changed_when: true
+  when: spe_report_title not in (webui_notes.json | map(attribute='title') | list)
+  no_log: true
+
+- name: Pin the run report note
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ spe_webui_local_port }}/api/v1/notes/{{ report_note.json.id }}/pin"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ webui_signin.json.token }}"
+    status_code: 200
+  when: report_note is changed
   no_log: true

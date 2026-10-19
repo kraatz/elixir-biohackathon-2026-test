@@ -40,8 +40,12 @@ No tunnel is needed: this instance runs on the controller.
 | Admin login | Value |
 |---|---|
 | URL | `http://localhost:{{ spe_webui_local_port }}` |
+{% if spe_webui_auth %}
 | User | `{{ spe_webui_admin_email }}` |
 | Password | `{{ spe_webui_admin_password }}` |
+{% else %}
+| Login | none (WEBUI_AUTH off) |
+{% endif %}
 {% endif %}
 {% if spe_frontend == 'agui' %}
 
