@@ -26,8 +26,12 @@ cp instances/example.yml instances/eval-07.yml   # set spe_instance and spe_seed
 export DENBI_LLM_API_KEY=...                      # LLM key for the OpenWebUI frontend
 ansible-playbook playbooks/create.yml  -e @instances/eval-07.yml
 ansible-playbook playbooks/verify.yml  -e @instances/eval-07.yml   # endpoints + smoke run
-ansible-playbook playbooks/destroy.yml -e @instances/eval-07.yml
+ansible-playbook playbooks/archive.yml -e @instances/eval-07.yml  # save chats + report now
+ansible-playbook playbooks/destroy.yml -e @instances/eval-07.yml  # archives first, then deletes
 ```
+
+Instances are normally created through the Coder portal (`../coder/README.md`),
+which runs these same playbooks.
 
 `create.yml` is idempotent: re-running converges an existing instance and
 changes nothing when nothing differs. Use `--tags stack`, `--tags trs` etc.
@@ -59,9 +63,25 @@ still runs first to find the host).
    `open-terminal` image carrying this instance's own CA and the WES/DRS/TRS
    bases, then runs OpenWebUI + open-terminal in a `spe-frontend` compose
    project. OpenWebUI is bound to `127.0.0.1:8080` and
-   uses the de.NBI LLM endpoint; the operator reaches it over an SSH tunnel.
+   uses the de.NBI LLM endpoint; the operator reaches it through the Coder
+   portal or an SSH tunnel. It runs without a login (`spe_webui_auth: false`),
+   LLM tag generation is off, and the pinned note "Run report" is created
+   from `reports/run_report.md.j2`.
 8. **handoff**: writes `output/<instance>/` (see below).
 9. **verify**: endpoint checks and a WES smoke run with a DRS input.
+
+Created through the Coder portal, the instance also gets the Coder agent
+(`coder_agent` role) so the portal can proxy OpenWebUI.
+
+## Run archive
+
+`destroy.yml` first runs `archive.yml`, which saves the run to
+`<spe_runs_root>/<UTC time>_<instance>/` (default `/data-share/runs`): every
+OpenWebUI chat (readable Markdown with tool calls and results, plus raw JSON)
+with its tags, the "Run report" note, other notes, `run.yml` with the
+parameters, and the canary record. If the archive fails, nothing is deleted;
+`-e spe_archive_skip=true` destroys without archiving. The file layout is
+described in `../coder/README.md`.
 
 ## Output directory
 

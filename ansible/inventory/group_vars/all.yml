@@ -116,6 +116,22 @@ spe_webui_auth: false
 spe_webui_admin_name: "SPE operator"
 spe_webui_admin_email: "admin@{{ spe_instance }}.spe.local"
 spe_webui_admin_password: "{{ ((spe_seed | string ~ ':webui-admin') | hash('sha256'))[:20] }}"
+# Run report: rendered from reports/run_report.md.j2 and created as the pinned
+# note "Run report" in OpenWebUI. Set by the Coder template; empty otherwise.
+spe_coder_owner: ""
+spe_coder_owner_email: ""
+spe_coder_workspace: ""
+spe_report_template: "{{ playbook_dir }}/../reports/run_report.md.j2"
+spe_report_title: Run report
+
+# Run archive: playbooks/archive.yml (also run first by destroy.yml) saves the
+# OpenWebUI chats and notes, the parameters and the canary record of an
+# instance to <spe_runs_root>/<UTC time>_<instance>/ on the controller.
+# destroy.yml stops if the archive fails; pass -e spe_archive_skip=true to
+# destroy without saving.
+spe_runs_root: /data-share/runs
+spe_archive_skip: false
+
 # The model id OpenWebUI serves from the de.NBI endpoint; the system prompt is
 # attached to it so every chat gets it by default.
 spe_webui_model_id: qwen3.8-27b

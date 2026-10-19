@@ -1,0 +1,34 @@
+---
+# On the SPE VM: export OpenWebUI (chats, notes, tags) and fetch the bundle to
+# the controller as {{ spe_output_dir }}/archive-bundle.json.
+- name: Exporter script
+  ansible.builtin.copy:
+    src: export_openwebui.py
+    dest: /tmp/spe-export-openwebui.py
+    mode: "0700"
+
+- name: Export OpenWebUI
+  ansible.builtin.command:
+    argv:
+      - python3
+      - /tmp/spe-export-openwebui.py
+      - "http://127.0.0.1:{{ spe_webui_local_port }}"
+      - /tmp/spe-openwebui-export.json
+      - "{{ spe_frontend_dir }}/run_report.md"
+  environment:
+    WEBUI_EMAIL: "{{ spe_webui_admin_email if spe_webui_auth else '' }}"
+    WEBUI_PASSWORD: "{{ spe_webui_admin_password if spe_webui_auth else '' }}"
+  register: export_out
+  changed_when: false
+
+- name: Fetch the export
+  ansible.builtin.fetch:
+    src: /tmp/spe-openwebui-export.json
+    dest: "{{ spe_output_dir }}/archive-bundle.json"
+    flat: true
+
+- name: Remove the export from the VM
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: [/tmp/spe-export-openwebui.py, /tmp/spe-openwebui-export.json]

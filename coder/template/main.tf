@@ -180,6 +180,9 @@ locals {
       spe_tiers             = jsondecode(data.coder_parameter.tiers.value)
       spe_workflows         = jsondecode(data.coder_parameter.workflows.value)
       spe_run_smoke_test    = tobool(data.coder_parameter.smoke_test.value)
+      spe_coder_owner       = data.coder_workspace_owner.me.name
+      spe_coder_owner_email = data.coder_workspace_owner.me.email
+      spe_coder_workspace   = data.coder_workspace.me.name
       spe_coder_agent_token = nonsensitive(coder_agent.main.token)
       spe_coder_init_script = local.agent_init_script
     },
@@ -264,6 +267,10 @@ resource "coder_metadata" "spe" {
   item {
     key   = "seed"
     value = tostring(local.seed)
+  }
+  item {
+    key   = "runs archive"
+    value = "/data-share/runs/<time>_${local.instance}/ (controller, written on stop/delete)"
   }
   item {
     key   = "canary record"

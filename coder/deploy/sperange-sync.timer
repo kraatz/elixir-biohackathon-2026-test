@@ -1,0 +1,10 @@
+# /etc/systemd/system/sperange-sync.timer
+[Unit]
+Description=Sync the Coder template from GitHub every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target
