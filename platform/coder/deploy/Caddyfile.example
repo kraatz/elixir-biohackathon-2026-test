@@ -1,0 +1,15 @@
+# /etc/caddy/Caddyfile on the portal VM. Replace sperange.example.org with the
+# real zone and fill in the ACME account from the Charité PKI.
+{
+	email you@bih-charite.de
+	acme_ca https://ACME-DIRECTORY-URL-FROM-PKI
+	acme_eab {
+		key_id KEY-ID-FROM-PKI
+		mac_key HMAC-KEY-FROM-PKI
+	}
+}
+
+# Dashboard and every workspace app (openwebui--<agent>--<ws>--<user>.…).
+sperange.example.org, *.sperange.example.org {
+	reverse_proxy 127.0.0.1:7080
+}

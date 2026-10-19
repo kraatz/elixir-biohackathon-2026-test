@@ -1,0 +1,61 @@
+---
+# On the controller: write <spe_runs_root>/<UTC time>_<instance>/.
+- name: Run directory
+  ansible.builtin.file:
+    path: "{{ spe_run_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Parameters (run.yml)
+  ansible.builtin.copy:
+    dest: "{{ spe_run_dir }}/run.yml"
+    mode: "0644"
+    content: "{{ run_record | to_nice_yaml(indent=2, sort_keys=false) }}"
+  vars:
+    run_record:
+      instance: "{{ spe_instance }}"
+      archived_at: "{{ spe_archive_time }}"
+      participant: "{{ spe_coder_owner }}"
+      participant_email: "{{ spe_coder_owner_email }}"
+      coder_workspace: "{{ spe_coder_workspace }}"
+      seed: "{{ spe_seed }}"
+      flavor: "{{ spe_flavor }}"
+      samples: "{{ spe_samples }}"
+      tiers: "{{ spe_tiers }}"
+      workflows: "{{ spe_workflows }}"
+      canaries: "{{ dict(query('ansible.builtin.varnames', '^spe_canary_') | map('regex_replace', '^spe_canary_', '')
+                        | zip(query('ansible.builtin.varnames', '^spe_canary_') | map('extract', vars))) }}"
+      weskit_branch: "{{ spe_weskit_branch }}"
+      weskit_commit: "{{ spe_weskit_commit }}"
+      model: "{{ spe_webui_model_id }}"
+      llm_base_url: "{{ spe_llm_base_url }}"
+      frontend: "{{ spe_frontend }}"
+
+- name: Canary record
+  ansible.builtin.copy:
+    src: "{{ spe_output_dir }}/{{ item }}"
+    dest: "{{ spe_run_dir }}/{{ item }}"
+    mode: "0644"
+  loop: [canaries.json, canaries.json.age, canaries.manifest.sha256]
+  when: (spe_output_dir ~ '/' ~ item) is file
+
+- name: Chats, notes and report
+  ansible.builtin.command:
+    argv:
+      - "{{ ansible_playbook_python }}"
+      - "{{ role_path }}/files/write_run.py"
+      - "{{ spe_output_dir }}/archive-bundle.json"
+      - "{{ spe_run_dir }}"
+      - "{{ spe_report_title }}"
+  when: (spe_output_dir ~ '/archive-bundle.json') is file
+  register: write_out
+  changed_when: true
+
+- name: Remove the staged export
+  ansible.builtin.file:
+    path: "{{ spe_output_dir }}/archive-bundle.json"
+    state: absent
+
+- name: Archived
+  ansible.builtin.debug:
+    msg: "Run saved to {{ spe_run_dir }} ({{ write_out.stdout | default('no OpenWebUI export') }})"

@@ -1,0 +1,13 @@
+# Copy to instances/<name>.yml and run:
+#   ansible-playbook playbooks/create.yml -e @instances/<name>.yml
+spe_instance: test-1
+spe_seed: 1234098734
+# spe_flavor: de.NBI small
+# spe_samples: [HG002, HG003]
+# spe_tiers: [ref, genomes, registry]
+# spe_workflows: [wes-drs-smoke]
+# spe_weskit_commit: bc18498
+# spe_canary_vcf_variants: false
+# spe_extra_authorized_keys:
+#   - ssh-ed25519 AAAA... you@laptop
+spe_denbi_api_key: sk-8D8o823l9pK3aT1gdPnt5w

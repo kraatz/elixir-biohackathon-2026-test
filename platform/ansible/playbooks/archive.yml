@@ -1,0 +1,69 @@
+---
+# Save one instance's run: OpenWebUI chats and notes (incl. the run report),
+# parameters and canary record, to <spe_runs_root>/<UTC time>_<instance>/.
+#   ansible-playbook playbooks/archive.yml -e @instances/<name>.yml
+# destroy.yml runs this first and stops if it fails, so chats are never lost
+# by accident. -e spe_archive_skip=true skips it.
+- name: Find the instance
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Instance name present
+      ansible.builtin.assert:
+        that: spe_instance is string and spe_instance | length > 0
+
+    - name: Archive time
+      ansible.builtin.set_fact:
+        spe_archive_time: "{{ now(utc=True).strftime('%Y-%m-%dT%H%M%SZ') }}"
+
+    - name: Server
+      openstack.cloud.server_info:
+        cloud: "{{ spe_cloud }}"
+        name: "{{ spe_instance }}-api"
+      register: archive_server
+      when: not spe_archive_skip
+
+    - name: Nothing to archive
+      ansible.builtin.debug:
+        msg: "{{ 'archive skipped (spe_archive_skip)' if spe_archive_skip else spe_instance ~ '-api does not exist' }}"
+      when: spe_archive_skip or archive_server.servers | length == 0
+
+    - name: Register instance host
+      ansible.builtin.add_host:
+        name: "{{ spe_instance }}-api"
+        groups: spe_api
+        ansible_host: "{{ addrs | selectattr('OS-EXT-IPS:type', 'equalto', 'floating' if spe_connect_via == 'floating' else 'fixed') | map(attribute='addr') | first }}"
+        ansible_user: "{{ spe_ssh_user }}"
+        ansible_ssh_private_key_file: "{{ spe_output_dir }}/ssh_key"
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        ansible_python_interpreter: /usr/bin/python3
+      vars:
+        addrs: "{{ archive_server.servers[0].addresses[spe_network] }}"
+      when: not spe_archive_skip and archive_server.servers | length > 0
+      changed_when: false
+
+- name: Export OpenWebUI from the instance
+  hosts: spe_api
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Reachable
+      ansible.builtin.wait_for_connection:
+        timeout: 120
+    - name: Export
+      ansible.builtin.include_role:
+        name: run_archive
+        tasks_from: export
+      when: spe_frontend == 'openwebui'
+
+- name: Write the run directory
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Write
+      ansible.builtin.include_role:
+        name: run_archive
+        tasks_from: write
+      vars:
+        spe_run_dir: "{{ spe_runs_root }}/{{ spe_archive_time }}_{{ spe_instance }}"
+      when: not spe_archive_skip and archive_server.servers | length > 0
