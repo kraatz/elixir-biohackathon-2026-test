@@ -51,6 +51,18 @@
   register: write_out
   changed_when: true
 
+- name: Overview without a chat export (agui frontend, or no frontend)
+  ansible.builtin.copy:
+    dest: "{{ spe_run_dir }}/index.md"
+    mode: "0644"
+    content: |
+      # Run {{ spe_run_dir | basename }}
+
+      - Archived: {{ spe_archive_time }}
+      - Frontend: {{ spe_frontend }}; no chat export (only the openwebui frontend keeps chats and notes)
+      - Parameters and canary record: [run.yml](run.yml), canaries.json
+  when: not ((spe_output_dir ~ '/archive-bundle.json') is file)
+
 - name: Remove the staged export
   ansible.builtin.file:
     path: "{{ spe_output_dir }}/archive-bundle.json"
