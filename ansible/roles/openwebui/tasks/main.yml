@@ -95,8 +95,11 @@
   changed_when: false
 
 # The agent system prompt is a per-user setting in OpenWebUI, so it cannot be
-# pre-seeded before anyone signs up. Instead the admin account is created up
-# front and the prompt is attached to the model, where it applies to every chat.
+# pre-seeded before anyone signs up. Instead the prompt is attached to the
+# model, where it applies to every chat. That needs an admin token: with
+# spe_webui_auth the admin account is created up front; without it (WEBUI_AUTH
+# false) the sign-in call itself creates and returns OpenWebUI's single
+# admin@localhost user, whatever credentials are sent.
 - name: Create the OpenWebUI admin (first account becomes admin)
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ spe_webui_local_port }}/api/v1/auths/signup"
@@ -109,6 +112,7 @@
     status_code: [200, 400]   # 400 = account already exists (idempotent re-run)
   register: webui_signup
   changed_when: webui_signup.status == 200
+  when: spe_webui_auth
   no_log: true
 
 - name: Sign in as the OpenWebUI admin

@@ -191,9 +191,6 @@ locals {
     trimsuffix(data.coder_workspace.me.access_url, "/"),
     trimsuffix(var.coder_agent_url, "/"),
   )
-
-  webui_admin_email    = "admin@${local.instance}.spe.local"
-  webui_admin_password = substr(sha256("${local.seed}:webui-admin"), 0, 20)
 }
 
 # --- agent + app --------------------------------------------------------------
@@ -267,15 +264,6 @@ resource "coder_metadata" "spe" {
   item {
     key   = "seed"
     value = tostring(local.seed)
-  }
-  item {
-    key   = "OpenWebUI login"
-    value = local.webui_admin_email
-  }
-  item {
-    key       = "OpenWebUI password"
-    value     = local.webui_admin_password
-    sensitive = true
   }
   item {
     key   = "canary record"

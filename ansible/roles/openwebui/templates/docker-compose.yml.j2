@@ -11,7 +11,8 @@ services:
     env_file: webui.env
     environment:
       ENABLE_OLLAMA_API: "false"
-      ENABLE_SIGNUP: "true"
+      WEBUI_AUTH: "{{ 'true' if spe_webui_auth else 'false' }}"
+      ENABLE_SIGNUP: "{{ 'true' if spe_webui_auth else 'false' }}"
       DEFAULT_USER_ROLE: pending
       ENABLE_CODE_INTERPRETER: "false"
       ENABLE_CODE_EXECUTION: "false"

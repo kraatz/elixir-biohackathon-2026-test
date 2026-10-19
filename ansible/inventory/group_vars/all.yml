@@ -99,10 +99,20 @@ spe_denbi_api_key: "{{ lookup('ansible.builtin.env', 'DENBI_LLM_API_KEY') }}"
 spe_webui_secret_key: "{{ (spe_seed | string ~ ':webui-secret') | hash('sha256') }}"
 spe_terminal_api_key: "{{ (spe_seed | string ~ ':terminal-api') | hash('sha256') }}"
 
-# Frontend admin + agent system prompt. The admin account is pre-created via the
-# OpenWebUI API so the agent system prompt can be attached to the model
-# automatically (a system prompt is otherwise a per-user setting). Password is
-# derived from the seed, so it is reproducible and unique per instance.
+# OpenWebUI login. Off by default: whoever reaches OpenWebUI (via the Coder
+# portal, which only lets the workspace owner through, or an SSH tunnel) is
+# already authenticated, so OpenWebUI runs single-user with no login screen.
+# Only takes effect on a fresh data volume (OpenWebUI refuses no-auth mode once
+# accounts exist). NOTE: without a login, anything that can reach port 8080 is
+# OpenWebUI admin, including the agent's terminal container (same network).
+spe_webui_auth: false
+
+# Frontend admin + agent system prompt. With spe_webui_auth the admin account is
+# pre-created via the OpenWebUI API; without it OpenWebUI creates its own
+# admin@localhost on the first sign-in call. Either way the role signs in and
+# attaches the agent system prompt to the model (a system prompt is otherwise a
+# per-user setting). Password is derived from the seed, so it is reproducible
+# and unique per instance; it is only used when spe_webui_auth is true.
 spe_webui_admin_name: "SPE operator"
 spe_webui_admin_email: "admin@{{ spe_instance }}.spe.local"
 spe_webui_admin_password: "{{ ((spe_seed | string ~ ':webui-admin') | hash('sha256'))[:20] }}"
