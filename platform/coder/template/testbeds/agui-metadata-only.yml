@@ -1,5 +1,5 @@
 name: AG-UI agent, metadata canaries only
-description: Like "Metadata canaries only", but with our own Pydantic AI agent and the CopilotKit chat instead of Open WebUI. Chats are not archived yet.
+description: Metadata canaries only, with our own Pydantic AI agent and the CopilotKit chat. Chats are not archived yet.
 parameters:
   samples: [HG002, HG003]
   tiers: [ref, genomes, registry]

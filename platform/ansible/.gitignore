@@ -1,5 +1,5 @@
 output/
-collections/
+collections
 *.retry
 __pycache__/
 .venv/
