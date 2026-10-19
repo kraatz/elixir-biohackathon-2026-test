@@ -16,6 +16,12 @@ variable "spe_ansible_dir" {
   default     = "/home/ubuntu/ansible-wip/elixir-biohackathon-2026-test/ansible"
 }
 
+variable "coder_agent_url" {
+  type        = string
+  description = "Coder URL as seen from inside the SPE VMs. Differs from the access URL while the portal is only reachable as localhost; empty = use the access URL."
+  default     = "http://10.0.2.245:7080"
+}
+
 data "coder_provisioner" "me" {}
 data "coder_workspace" "me" {}
 data "coder_workspace_owner" "me" {}
@@ -175,9 +181,15 @@ locals {
       spe_workflows         = jsondecode(data.coder_parameter.workflows.value)
       spe_run_smoke_test    = tobool(data.coder_parameter.smoke_test.value)
       spe_coder_agent_token = nonsensitive(coder_agent.main.token)
-      spe_coder_init_script = coder_agent.main.init_script
+      spe_coder_init_script = local.agent_init_script
     },
     { for k, _ in local.canary_types : "spe_canary_${k}" => contains(local.canaries, k) },
+  )
+
+  agent_init_script = var.coder_agent_url == "" ? coder_agent.main.init_script : replace(
+    coder_agent.main.init_script,
+    trimsuffix(data.coder_workspace.me.access_url, "/"),
+    trimsuffix(var.coder_agent_url, "/"),
   )
 
   webui_admin_email    = "admin@${local.instance}.spe.local"
