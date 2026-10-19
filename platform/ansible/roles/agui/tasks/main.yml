@@ -44,12 +44,12 @@
   delegate_to: localhost
   changed_when: false
 
-- name: Tracked agent and chat-ui sources, staged
+- name: Tracked agent and chat UI sources, staged
   ansible.builtin.shell: |
     set -euo pipefail
-    git -C {{ spe_agui_source_dir | quote }} ls-files -z -- agent chat-ui \
+    git -C {{ spe_agui_source_dir | quote }} ls-files -z -- pydantic-ai-agent copilotkit-chat \
       | rsync -a --from0 --files-from=- {{ (spe_agui_source_dir ~ '/') | quote }} {{ (agui_stage.path ~ '/') | quote }}
-    for c in agent chat-ui; do
+    for c in pydantic-ai-agent copilotkit-chat; do
       (cd {{ agui_stage.path | quote }}/$c && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)
     done
   args:
@@ -78,7 +78,7 @@
     delete: true
     checksum: true
     use_ssh_args: true
-  loop: [agent, chat-ui]
+  loop: [pydantic-ai-agent, copilotkit-chat]
 
 - name: Staging directory removed
   ansible.builtin.file:
@@ -96,8 +96,8 @@
       pull: false
     source: build
   loop:
-    - { image: "{{ agui_agent_image }}", dir: agent }
-    - { image: "{{ agui_ui_image }}", dir: chat-ui }
+    - { image: "{{ agui_agent_image }}", dir: pydantic-ai-agent }
+    - { image: "{{ agui_ui_image }}", dir: copilotkit-chat }
   loop_control:
     label: "{{ item.image }}"
 

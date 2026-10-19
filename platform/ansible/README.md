@@ -193,7 +193,7 @@ ssh -i output/INSTANCE/ssh_key -L 8080:127.0.0.1:8080 ubuntu@FLOATING_IP
 ## Agent frontend (AG-UI)
 
 `spe_frontend: agui` runs a Pydantic AI agent we own instead of Open WebUI's
-agent loop (`agent/`, `chat-ui/`, spec `docs/specs/2026-10-15-agui-frontend-design.md`).
+agent loop (`platform/agui/pydantic-ai-agent/`, `platform/agui/copilotkit-chat/`, spec `docs/specs/2026-10-15-agui-frontend-design.md`).
 Three containers in compose project `spe-frontend`, so switching `spe_frontend`
 replaces one frontend with the other (its volumes, `open-webui-data` included, stay):
 
@@ -206,7 +206,7 @@ replaces one frontend with the other (its volumes, `open-webui-data` included, s
   `agent-runs` (player input and canaries: private).
 - **sandbox** — the open-terminal image from role `sandbox`; publishes nothing.
 
-The role copies only the files git tracks under `agent/` and `chat-ui/` to
+The role copies only the files git tracks under `platform/agui/pydantic-ai-agent/` and `platform/agui/copilotkit-chat/` to
 `spe_frontend_dir/build/` and builds `spe-agent:<hash>` and `spe-chat-ui:<hash>`
 from them (the hash covers the build context, so unchanged sources do not
 rebuild). Model: `spe_agent_model_provider: openai_compatible` with
@@ -214,7 +214,7 @@ rebuild). Model: `spe_agent_model_provider: openai_compatible` with
 OpenAI-compatible API; or `anthropic`. The key comes from `SPE_LLM_API_KEY` on the
 controller (or, as before, `DENBI_LLM_API_KEY` / `ANTHROPIC_API_KEY`). Optionally,
 `spe_agent_allowed_models` restricts the accepted model names (our development VM pins
-`claude-haiku-5-5` this way); empty by default. Another vendor: see `agent/README.md`.
+`claude-haiku-5-5` this way); empty by default. Another vendor: see `platform/agui/pydantic-ai-agent/README.md`.
 
 Checks after deployment and in `verify.yml`, none of which calls the model:
 health, UI, 401 without or with a wrong key, and the key boundary — through the

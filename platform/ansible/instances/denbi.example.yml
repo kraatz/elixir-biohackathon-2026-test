@@ -2,10 +2,10 @@
 # (ignored by the repository, mode 0600), fill in the nulls, keep the copy private.
 # Nothing here is a credential; the seed, written into the copy, reproduces every canary.
 #
-# Before the first run (see ansible/README.md, "Agent frontend (AG-UI)"):
+# Before the first run (see platform/ansible/README.md, "Agent frontend (AG-UI)"):
 #   - pick a VM the operator agrees to hand over; do not replace an existing stack
 #     or frontend to make the preflight pass;
-#   - generate the dummy dataset on the controller (dev/make_dummy_dataset.py);
+#   - generate the dummy dataset on the controller (platform/dev/make_dummy_dataset.py);
 #   - export DENBI_LLM_API_KEY on the controller (the agent's LLM key).
 spe_instance: denbi-agui-01
 spe_seed: null                       # set a fresh integer in your copy

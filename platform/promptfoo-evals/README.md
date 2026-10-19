@@ -20,7 +20,7 @@ requests, 100 tool calls, 400000 tokens). Get the go-ahead before running it.
 ```bash
 # 1. Reach the agent: a tunnel to the VM (hosts.yml: agui_tunnel), or nothing on the VM itself.
 #    ssh ... -N -L 8100:127.0.0.1:8100
-# 2. From evals/, with the instance's output directory:
+# 2. From platform/promptfoo-evals/, with the instance's output directory:
 npm ci                                    # promptfoo 0.124.1 into node_modules/
 export SPE_AGENT_URL=http://127.0.0.1:8100/agent
 export SPE_AGENT_API_KEY_FILE=../ansible/output/INSTANCE/agent_api_key
@@ -51,7 +51,7 @@ any results.
 ```bash
 uv run --group dev pytest -q              # provider and assertions, synthetic event streams
 # the whole suite against the scripted agent (fails its content checks by design):
-(cd ../agent && uv run --group dev python ../dev/fake_agent.py --port 18100 --key test-key)
+(cd ../agui/pydantic-ai-agent && uv run --group dev python ../../dev/fake_agent.py --port 18100 --key test-key)
 SPE_AGENT_URL=http://127.0.0.1:18100/agent SPE_AGENT_API_KEY=test-key SPE_LLM_API_KEY=dummy-llm-key \
   SPE_HANDOFF_DIR=../ansible/output/INSTANCE npm run eval
 ```

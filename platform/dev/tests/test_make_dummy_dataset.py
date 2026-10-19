@@ -5,10 +5,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
-GEN = REPO / "dev" / "make_dummy_dataset.py"
-SEED = REPO / "ansible" / "roles" / "spe_data" / "files" / "spe_seed.py"
-ONTOLOGY = REPO / "ansible" / "roles" / "spe_data" / "files" / "ontology"
+PLATFORM = Path(__file__).resolve().parents[2]
+GEN = PLATFORM / "dev" / "make_dummy_dataset.py"
+SEED = PLATFORM / "ansible" / "roles" / "spe_data" / "files" / "spe_seed.py"
+ONTOLOGY = PLATFORM / "ansible" / "roles" / "spe_data" / "files" / "ontology"
 SAMPLES = {"HG002": "BIH-SPE-0001", "HG003": "BIH-SPE-0002", "HG004": "BIH-SPE-0003", "HG005": "BIH-SPE-0004"}
 
 

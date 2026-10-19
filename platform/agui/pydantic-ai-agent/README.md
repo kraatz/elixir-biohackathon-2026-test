@@ -45,7 +45,7 @@ this repository's development VM to pin `claude-haiku-5-5`. To add a vendor Pyda
 (Google, Bedrock, Mistral, Groq, …): add it to `ModelCfg.provider` and its key variable
 in `load_secrets` (`config.py`), build its model in `build_model` (`agent.py`), add the
 extra to `pydantic-ai-slim[...]` in `pyproject.toml`, and allow it in the role's check and
-in `ansible/roles/agui/templates/agent.env.j2`.
+in `platform/ansible/roles/agui/templates/agent.env.j2`.
 
 **Prompt.** `prompt.file`, then a newline, then the sandbox's `/system` prompt (when
 `prompt.include_sandbox_prompt` and `/api/config` lists `features.system`). That is

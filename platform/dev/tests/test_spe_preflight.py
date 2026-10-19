@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
-SCRIPT = REPO / "ansible" / "roles" / "existing_host" / "files" / "spe_preflight.py"
+PLATFORM = Path(__file__).resolve().parents[2]
+SCRIPT = PLATFORM / "ansible" / "roles" / "existing_host" / "files" / "spe_preflight.py"
 
 
 def load():

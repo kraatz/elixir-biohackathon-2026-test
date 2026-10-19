@@ -9,8 +9,8 @@ chat UI to probe it, and promptfoo evaluations that test the agent directly.
   instance with the agent on an existing VM, including every private value the
   setup needs and where it must (and must not) live.
 - [`AGENTS.md`](AGENTS.md): repository layout, working rules, how to run the tests.
-- [`ansible/README.md`](ansible/README.md): every playbook option.
-- [`agent/`](agent/README.md), [`chat-ui/`](chat-ui/README.md), [`evals/`](evals/README.md):
+- [`platform/ansible/README.md`](platform/ansible/README.md): every playbook option.
+- [`platform/agui/`](platform/agui/pydantic-ai-agent/README.md), [`platform/promptfoo-evals/`](platform/promptfoo-evals/README.md):
   the agent, its chat UI and its evaluations.
 - `threats/`: the threat model catalog (`validate.py` checks it against `vocabulary.yaml`).
 
@@ -38,8 +38,8 @@ conversation.
 flowchart TB
   subgraph controller["Controller (operator's machine)"]
     ansible["ansible-playbook<br/>create / verify / destroy"]
-    output[("ansible/output/INSTANCE<br/>canary record, agent key,<br/>hand-off")]
-    promptfoo["promptfoo<br/>evals/"]
+    output[("platform/ansible/output/INSTANCE<br/>canary record, agent key,<br/>hand-off")]
+    promptfoo["promptfoo<br/>platform/promptfoo-evals/"]
     browser["Browser"]
   end
 
@@ -136,7 +136,7 @@ guard `spe_agent_allowed_models: [claude-haiku-5-5]` in that VM's instance file.
 guard is off by default, so other setups use whatever model they name. The key comes
 from `SPE_LLM_API_KEY` on the controller, whatever the provider. Other vendors Pydantic
 AI supports (Google, Bedrock, Mistral, Groq, …) need a small addition to the agent's
-configuration; see `agent/README.md`.
+configuration; see `platform/agui/pydantic-ai-agent/README.md`.
 
 **One turn, end to end.** The browser sends the conversation to the chat UI's
 runtime route, which forwards it over AG-UI with the bearer key. The agent sends it
@@ -154,9 +154,9 @@ tunnel.
 ## Evaluating the agent with promptfoo
 
 promptfoo calls the agent's AG-UI endpoint directly, without the chat UI, and checks
-both the answer and every tool call. The provider (`evals/agui_provider.py`) and the
-assertions (`evals/asserts.py`) use only the Python standard library; promptfoo
-0.124.1 is pinned in `evals/package-lock.json`.
+both the answer and every tool call. The provider (`platform/promptfoo-evals/agui_provider.py`) and the
+assertions (`platform/promptfoo-evals/asserts.py`) use only the Python standard library; promptfoo
+0.124.1 is pinned in `platform/promptfoo-evals/package-lock.json`.
 
 **Every test is one real agent run, which costs model calls.** The starter suite has
 3 tests.
@@ -169,8 +169,8 @@ Replace `VM` with the instance's SSH host and `INSTANCE` with its name.
 # 1. A tunnel to the instance (the command is agui_tunnel in ansible/output/INSTANCE/hosts.yml):
 ssh -F ~/.ssh/config ubuntu@VM -N -L 8100:127.0.0.1:8100 &
 
-# 2. From evals/:
-cd evals
+# 2. From platform/promptfoo-evals/:
+cd platform/promptfoo-evals
 npm ci
 export SPE_AGENT_URL=http://127.0.0.1:8100/agent
 export SPE_AGENT_API_KEY_FILE=../ansible/output/INSTANCE/agent_api_key
@@ -200,8 +200,8 @@ share results with `promptfoo share`.
 
 ### Add a test
 
-Tests live in `evals/promptfooconfig.yaml`. A test is a prompt (`vars.message`) and
-assertions; Python assertions are functions `fn(output, context)` in `evals/asserts.py`,
+Tests live in `platform/promptfoo-evals/promptfooconfig.yaml`. A test is a prompt (`vars.message`) and
+assertions; Python assertions are functions `fn(output, context)` in `asserts.py` next to it,
 where `output` is the agent's final answer and `context["metadata"]["tool_calls"]` is
 the list of `{id, name, args, result}` the agent made:
 
@@ -228,9 +228,9 @@ def never_posts_to_drs(output, context):
 A test can also continue a conversation: `vars.history` (a list of
 `{role, content}`) is sent as earlier turns before `message`. Assertions that need a
 secret read it from the environment or a file, never from the config. Add an
-offline test for any new assertion in `evals/tests/` and run
+offline test for any new assertion in `platform/promptfoo-evals/tests/` and run
 `uv run --group dev pytest -q` there; the whole suite also runs without a model
-against the scripted agent in `dev/fake_agent.py` (see `evals/README.md`).
+against the scripted agent in `platform/dev/fake_agent.py` (see `platform/promptfoo-evals/README.md`).
 
 Results depend on the model: results from different providers or models (for example
 our development VM's Anthropic runs and our de.NBI runs) are not comparable; record

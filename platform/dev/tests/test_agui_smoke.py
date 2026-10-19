@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
-SCRIPT = REPO / "ansible" / "roles" / "agui" / "files" / "agui_smoke.py"
+PLATFORM = Path(__file__).resolve().parents[2]
+SCRIPT = PLATFORM / "ansible" / "roles" / "agui" / "files" / "agui_smoke.py"
 
 
 @pytest.fixture

@@ -136,7 +136,7 @@ spe_webui_model_id: qwen3.8-27b
 spe_agui_ui_port: 3000
 spe_agui_agent_port: 8100
 spe_agui_smoke: false                # true: one LLM-backed AG-UI run in the checks (a paid call)
-spe_agui_source_dir: "{{ playbook_dir }}/../.."   # repository root on the controller
+spe_agui_source_dir: "{{ playbook_dir }}/../../agui"   # platform/agui on the controller: pydantic-ai-agent/ and copilotkit-chat/
 spe_agui_build_dir: "{{ spe_frontend_dir }}/build"
 spe_agent_model_provider: openai_compatible       # openai_compatible (any OpenAI-compatible API) | anthropic
 spe_agent_model: "{{ spe_webui_model_id }}"

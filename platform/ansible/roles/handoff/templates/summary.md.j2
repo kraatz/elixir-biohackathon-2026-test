@@ -64,7 +64,7 @@ No tunnel is needed: this instance runs on the controller. Browse to `http://loc
 The agent requires `Authorization: Bearer <key>`; the key is in `agent_api_key` in this
 directory (mode 0600), never in this summary. promptfoo against the agent:
 `SPE_AGENT_URL=http://127.0.0.1:{{ spe_agui_agent_port }}/agent SPE_AGENT_API_KEY_FILE={{ spe_output_dir }}/agent_api_key`,
-then see `evals/README.md`. Run log on the VM: `docker compose -p spe-frontend exec agent cat /var/lib/spe-agent/runs.jsonl`
+then see `platform/promptfoo-evals/README.md`. Run log on the VM: `docker compose -p spe-frontend exec agent cat /var/lib/spe-agent/runs.jsonl`
 (player input and canaries: keep it private).
 {% endif %}
 

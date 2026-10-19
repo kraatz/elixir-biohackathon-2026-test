@@ -2,7 +2,7 @@
 """The real agent service with a scripted model and an in-process fake sandbox.
 
 For exercising the chat UI and AG-UI clients without an LLM or a sandbox:
-  cd agent && uv run --group dev python ../dev/fake_agent.py --port 18100 --key <test key>
+  cd platform/agui/pydantic-ai-agent && uv run --group dev python ../../dev/fake_agent.py --port 18100 --key <test key>
 The model runs one `run_command` per turn and then answers; a message containing
 "fail" makes the model raise, so the run ends in RUN_ERROR. The run log goes to a
 temporary directory.

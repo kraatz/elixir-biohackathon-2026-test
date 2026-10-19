@@ -1,6 +1,6 @@
 # The development VM configures itself. Copy to dev-local.yml (ignored by the
 # repository, mode 0600) and set spe_seed. Generate the dummy dataset first
-# (dev/make_dummy_dataset.py).
+# (platform/dev/make_dummy_dataset.py).
 spe_instance: dev-local
 spe_seed: null                       # set a throwaway integer in your copy
 spe_provision: existing

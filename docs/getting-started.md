@@ -3,8 +3,9 @@
 This guide takes a new operator from a fresh checkout to a running SPE instance
 with the agent frontend on an existing VM, including every private value the
 setup needs: what it is, where it comes from, where it lives and who may see it.
-Reference material lives elsewhere: `ansible/README.md` (all playbook options),
-`agent/README.md`, `chat-ui/README.md`, `evals/README.md`.
+Reference material lives elsewhere: `platform/ansible/README.md` (all playbook options),
+`platform/agui/pydantic-ai-agent/README.md`, `platform/agui/copilotkit-chat/README.md`,
+`platform/promptfoo-evals/README.md`.
 
 An instance is one VM running the GA4GH workflow stack (WES, DRS, TRS behind
 Traefik on 443), seeded with test data and canary tokens, plus a frontend:
@@ -17,13 +18,13 @@ run `ansible-playbook`; the controller and the VM may be the same machine.
 **On the controller**
 
 - This repository (`git clone git@github.com:kraatz/elixir-biohackathon-2026-test.git`).
-- `ansible-core` with the collections in `ansible/requirements.yml` (a system
+- `ansible-core` with the collections in `platform/ansible/requirements.yml` (a system
   Ansible package usually ships them; otherwise
-  `ansible-galaxy collection install -r ansible/requirements.yml -p ansible/collections`).
+  `ansible-galaxy collection install -r platform/ansible/requirements.yml -p platform/ansible/collections`).
 - `git`, `rsync`, `ssh`, and `samtools`, `bgzip`, `tabix` to generate the dummy dataset.
 - Optional, for evaluations: Node.js 24 and `uv`.
 - Not needed in existing-VM mode: `clouds.yaml`, `openstacksdk`, `/data-share`.
-  Those belong to `spe_provision: openstack`, which creates VMs (see `ansible/README.md`).
+  Those belong to `spe_provision: openstack`, which creates VMs (see `platform/ansible/README.md`).
 
 **On the target VM**
 
@@ -41,17 +42,17 @@ needed port is taken, or if disk is short. Nothing on a refused VM is changed.
 
 | What | What it is for | Where it comes from | Where it lives | Share? |
 |---|---|---|---|---|
-| **Seed** (`spe_seed`) | Derives every canary token, the agent's bearer key, the sandbox key and the Open WebUI admin password. Anyone with it can reproduce all canaries | You generate it (step 4) | Your instance file `ansible/instances/<name>.yml` (git-ignored, mode 0600) | **No.** Never commit it |
+| **Seed** (`spe_seed`) | Derives every canary token, the agent's bearer key, the sandbox key and the Open WebUI admin password. Anyone with it can reproduce all canaries | You generate it (step 4) | Your instance file `platform/ansible/instances/<name>.yml` (git-ignored, mode 0600) | **No.** Never commit it |
 | **LLM key** | Lets the agent call the model | Your LLM provider. For the de.NBI endpoint: the project's key (ask the project; on de.NBI VMs Open WebUI already uses it in `~/agent-stack/webui.env` as `OPENAI_API_KEY`). For another OpenAI-compatible API or Anthropic: your own key | Exported in your shell at run time: `SPE_LLM_API_KEY` (or `DENBI_LLM_API_KEY` / `ANTHROPIC_API_KEY`). On the VM only in `spe-frontend/agent.env` (0600), read by the agent container alone | **No** |
 | **SSH key and config** for de.NBI | Reaching VMs on the private network through the jump host | Your de.NBI account (key registered with de.NBI and on the VMs) | `~/.ssh/config` and your key, outside any repository | **No** |
-| **Agent bearer key** | Required by the agent's AG-UI endpoint; the chat UI and promptfoo send it | Derived from the seed by the playbook | `ansible/output/<instance>/agent_api_key` (0600); on the VM in `agent.env` and `chat-ui.env` (0600) | Only with people who may use the agent |
-| **Canary record** | The answer key: every planted token and where it is | Written by the playbook | `ansible/output/<instance>/canaries.json` (0600; encrypted to `canaries.json.age` if `spe_age_recipient` is set) | **No.** Never copy it to a VM or to a player. `canaries.manifest.sha256` (hashes only) may go to detection tooling |
-| **Hand-off** | Addresses, tunnel command, Open WebUI admin password (`openwebui` frontend) | Written by the playbook | `ansible/output/<instance>/hosts.yml`, `summary.md` | Operators only |
+| **Agent bearer key** | Required by the agent's AG-UI endpoint; the chat UI and promptfoo send it | Derived from the seed by the playbook | `platform/ansible/output/<instance>/agent_api_key` (0600); on the VM in `agent.env` and `chat-ui.env` (0600) | Only with people who may use the agent |
+| **Canary record** | The answer key: every planted token and where it is | Written by the playbook | `platform/ansible/output/<instance>/canaries.json` (0600; encrypted to `canaries.json.age` if `spe_age_recipient` is set) | **No.** Never copy it to a VM or to a player. `canaries.manifest.sha256` (hashes only) may go to detection tooling |
+| **Hand-off** | Addresses, tunnel command, Open WebUI admin password (`openwebui` frontend) | Written by the playbook | `platform/ansible/output/<instance>/hosts.yml`, `summary.md` | Operators only |
 | **Run log** | Every agent run: player input, tool calls and results, answers, usage | Written by the agent | On the VM, volume `spe-frontend_agent-runs` | **No**: contains canaries |
-| **Evaluation reports** | promptfoo results | `npm run eval` | `evals/reports/`, `evals/.promptfoo/` (git-ignored) | **No**: contain canaries. Delete after use |
+| **Evaluation reports** | promptfoo results | `npm run eval` | `platform/promptfoo-evals/reports/`, `.promptfoo/` (git-ignored) | **No**: contain canaries. Delete after use |
 
-Everything in `ansible/output/` and every real instance file is git-ignored.
-**Back up `ansible/output/<instance>/` and your instance file** somewhere private:
+Everything in `platform/ansible/output/` and every real instance file is git-ignored.
+**Back up `platform/ansible/output/<instance>/` and your instance file** somewhere private:
 they are the only record of that instance's canaries (the seed can regenerate them,
 the canary record is the readable list).
 
@@ -98,13 +99,13 @@ and `VM` with the VM's SSH host.
 1. **Dummy dataset** on the controller (stands in for the GIAB genomes):
 
    ```bash
-   python3 dev/make_dummy_dataset.py --out ~/spe-dummy-data --seed 1
+   python3 platform/dev/make_dummy_dataset.py --out ~/spe-dummy-data --seed 1
    ```
 
 2. **Instance file** from a template, private from the start:
 
    ```bash
-   cd ansible
+   cd platform/ansible
    umask 077
    cp instances/denbi.example.yml instances/NAME.yml        # a remote VM
    # or: cp instances/dev-local.example.yml instances/NAME.yml   # the controller itself
@@ -126,12 +127,12 @@ and `VM` with the VM's SSH host.
    | `spe_agent_model_provider`, `spe_agent_model`, `spe_agent_base_url` | your LLM. `openai_compatible` works with any OpenAI-compatible API: set `spe_agent_base_url` (default: the de.NBI endpoint) and the model name, e.g. `qwen3.8-27b` on de.NBI. `anthropic` uses Anthropic's API. Optional `spe_agent_allowed_models: [<name>]` refuses any other model, a guard against typos selecting a pricier one. Other vendors: `agent/README.md` |
    | `spe_agui_smoke` | `false`; set `true` on a run to add one model-backed check |
 
-   `git status` must not list the file: if it does, stop and check `ansible/.gitignore`.
+   `git status` must not list the file: if it does, stop and check `platform/ansible/.gitignore`.
 
 ## 5. Deploy
 
 ```bash
-cd ansible
+cd platform/ansible
 export SPE_LLM_API_KEY=...          # your provider's key (DENBI_LLM_API_KEY / ANTHROPIC_API_KEY also work)
 ansible-playbook playbooks/create.yml -e @instances/NAME.yml </dev/null
 ```
@@ -151,7 +152,7 @@ If a later run is refused for disk only because the images now occupy the VM, pa
 
 ## 6. Use it
 
-`ansible/output/<instance>/hosts.yml` has the tunnel command (`agui_tunnel`):
+`platform/ansible/output/<instance>/hosts.yml` has the tunnel command (`agui_tunnel`):
 
 ```bash
 ssh -F ~/.ssh/config ubuntu@VM -N -L 3000:127.0.0.1:3000 -L 8100:127.0.0.1:8100
@@ -162,9 +163,9 @@ card; a reload starts a new conversation. If 3000 or 8100 is taken on your machi
 change only the first number of each `-L` (e.g. `-L 13000:127.0.0.1:3000`).
 
 To call the agent directly, as promptfoo does:
-`POST http://localhost:8100/agent` with `Authorization: Bearer $(cat ansible/output/<instance>/agent_api_key)`.
+`POST http://localhost:8100/agent` with `Authorization: Bearer $(cat platform/ansible/output/<instance>/agent_api_key)`.
 
-Evaluations: see `evals/README.md` (every test is a model-backed agent run).
+Evaluations: see `platform/promptfoo-evals/README.md` (every test is a model-backed agent run).
 
 On the VM (`ssh …` then):
 
@@ -184,16 +185,16 @@ ansible-playbook playbooks/destroy.yml -e @instances/NAME.yml -e spe_confirm_res
 On an existing VM this never deletes the VM: it takes this instance's compose
 stacks down with their volumes (including the run log) and removes its directories,
 CA anchor, marker and manifest, after checking they belong to this instance. Built
-images and `ansible/output/<instance>/` are kept. Then:
+images and `platform/ansible/output/<instance>/` are kept. Then:
 
-- keep or archive `ansible/output/<instance>/` and the instance file privately, or
+- keep or archive `platform/ansible/output/<instance>/` and the instance file privately, or
   delete them when the instance's canaries no longer matter;
-- delete `evals/reports/` and `evals/.promptfoo/`;
+- delete `platform/promptfoo-evals/reports/` and `platform/promptfoo-evals/.promptfoo/`;
 - unset the LLM key in your shell.
 
 ## 8. Rules worth repeating
 
-- Never commit a real instance file, anything under `ansible/output/`, keys,
+- Never commit a real instance file, anything under `platform/ansible/output/`, keys,
   `clouds.yaml` or `.env` files. Check `git status` and `git diff --staged` before
   every commit.
 - Never pass a key on a command line or put it in a prompt, test variable or config
