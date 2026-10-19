@@ -1,18 +1,23 @@
 # elixir-biohackathon-2026-test
 
 Threat models for agents working inside Secure Processing Environments (SPEs), and
-the Ansible automation that builds SPE evaluation instances: a GA4GH workflow stack
-(WES, DRS, TRS) seeded with test data and canary tokens, plus an LLM agent with a
-chat UI to probe it, and promptfoo evaluations that test the agent directly.
+a platform that builds SPE evaluation instances to test them against: a GA4GH
+workflow stack (WES, DRS, TRS) seeded with test data and canary tokens, an LLM agent
+with a chat frontend to probe it, a self-service portal that hands instances to
+participants and archives what they did, and promptfoo evaluations that test the
+agent directly.
 
-- **New here? Start with [`docs/getting-started.md`](docs/getting-started.md)**: an
-  instance with the agent on an existing VM, including every private value the
-  setup needs and where it must (and must not) live.
-- [`AGENTS.md`](AGENTS.md): repository layout, working rules, how to run the tests.
-- [`platform/ansible/README.md`](platform/ansible/README.md): every playbook option.
-- [`platform/agui/`](platform/agui/pydantic-ai-agent/README.md), [`platform/promptfoo-evals/`](platform/promptfoo-evals/README.md):
-  the agent, its chat UI and its evaluations.
 - `threats/`: the threat model catalog (`validate.py` checks it against `vocabulary.yaml`).
+- [`platform/`](platform/README.md): everything that builds, runs or tests an instance.
+  - [`platform/coder/README.md`](platform/coder/README.md): the portal, for
+    participants and for whoever deploys it.
+  - [`docs/getting-started.md`](docs/getting-started.md): an instance by hand on an
+    existing VM, including every private value the setup needs and where it must
+    (and must not) live.
+  - [`platform/ansible/README.md`](platform/ansible/README.md): every playbook option.
+  - [`platform/agui/`](platform/agui/pydantic-ai-agent/README.md), [`platform/promptfoo-evals/`](platform/promptfoo-evals/README.md):
+    our agent, its chat UI and the evaluations.
+- [`AGENTS.md`](AGENTS.md): repository layout, working rules, how to run the tests.
 
 ## Try it now
 

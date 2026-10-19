@@ -22,8 +22,8 @@ if [[ -f $state && $(cat "$state") == "$head" && ${1:-} != --force ]]; then
 fi
 
 coder templates push "$SPE_TEMPLATE_NAME" \
-  --directory coder/template \
-  --variable "spe_ansible_dir=$SPE_REPO_DIR/ansible" \
+  --directory platform/coder/template \
+  --variable "spe_ansible_dir=$SPE_REPO_DIR/platform/ansible" \
   --variable "coder_agent_url=$SPE_AGENT_URL" \
   --name "$(git rev-parse --short HEAD)" \
   --message "$(git log -1 --format=%s)" \

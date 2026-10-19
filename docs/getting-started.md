@@ -13,6 +13,10 @@ Traefik on 443), seeded with test data and canary tokens, plus a frontend:
 or `openwebui`. Everything is driven from a **controller**, the machine where you
 run `ansible-playbook`; the controller and the VM may be the same machine.
 
+This is the by-hand path. Participants normally get instances from the Coder
+portal instead (`platform/coder/README.md`), which runs the same playbooks with
+`spe_provision: openstack` and archives each run when it is stopped.
+
 ## 1. What you need
 
 **On the controller**

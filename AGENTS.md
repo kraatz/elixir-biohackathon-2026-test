@@ -26,19 +26,19 @@ guide for humans and coding agents working in this repository.
 ## Lifecycle of a unit of work
 
 A unit of work is a coherent change: a fix, a feature, a docs update. Each is
-done in its own worktree and ends on the working branch (`agent-agui-frontend`),
-pushed, so the local branch and the remote always show the current state.
+done in its own worktree and ends on `main` through a pull request, so the
+remote always shows the current state.
 
-1. **Create a worktree from the local working branch**, not from `origin`, so it
-   includes unpushed commits:
-   `git worktree add <path> -b <topic> agent-agui-frontend`.
+1. **Create a worktree** on a topic branch from `main`:
+   `git worktree add <path> -b <topic> main`.
 2. **Commit** in the worktree, as in the working rules above.
-3. **Fast-forward the local working branch** to the work, in the main checkout:
-   `git merge --ff-only <topic>`.
-4. **Push it**: `git push origin agent-agui-frontend`, a fast-forward only. If the
-   remote has moved on, fetch and rebase the local work, never force.
-5. **Clean up the worktree**: `git worktree remove <path>` and
+3. **Push the topic branch and open a pull request** against `main`. If `main`
+   has moved on, merge or rebase the topic branch; never force-push `main`.
+4. **Clean up the worktree** after the merge: `git worktree remove <path>` and
    `git branch -d <topic>`. Check first that it has no uncommitted changes.
+
+The portal VM follows `main` (`platform/coder/deploy/sync-template.sh`): a merge
+to `main` changes what participants get within minutes.
 
 Private instance files and `platform/ansible/output/` exist only in the main checkout,
 not in a worktree. To deploy a worktree's agent or chat UI before it is merged,
@@ -61,6 +61,12 @@ cd platform/ansible && ansible-playbook playbooks/create.yml -e @instances/NAME.
 Ansible needs a blocking stdin here: always run it with `</dev/null`, from
 `platform/ansible/`. The collections come from the system Ansible package.
 
+## Coder portal
+
+`platform/coder/` is a self-service portal (Coder) that runs the playbooks for
+participants, proxies the chat frontend into the browser and archives each run on
+stop (`platform/coder/README.md`). Testbed presets are `platform/coder/template/testbeds/*.yml`.
+
 ## AG-UI agent frontend
 
 Built from plan `docs/plans/2026-10-15-agui-frontend.md` and spec
@@ -71,8 +77,7 @@ deviation from the plan with its cost if wrong, and the acceptance evidence is
 How to deploy and use it: [`docs/getting-started.md`](docs/getting-started.md).
 
 All 13 tasks are done, including the model-backed checks on the development VM
-(where this VM uses Anthropic `claude-haiku-5-5`) and on de.NBI (`qwen3.8-27b`). Running instances
-(2026-10-16): `dev-local` on the development VM and `denbi-agui-01` on de.NBI
-`agent-service-1` (converging there needs `-e spe_min_free_gb=5` until disk is
-freed). Their private instance files and `ansible/output/` directories exist only
-in the operator's checkout, never in git.
+(Anthropic `claude-haiku-5-5`) and on de.NBI (`qwen3.8-27b`). Merged into `main`
+on 2026-10-19 together with the Coder portal, which offers it as the `agui`
+frontend. Not done yet: archiving its chats on stop (the run archive exports
+Open WebUI only) and a run-report equivalent in the CopilotKit chat.

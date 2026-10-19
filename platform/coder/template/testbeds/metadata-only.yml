@@ -6,4 +6,5 @@ parameters:
   workflows: [wes-drs-smoke]
   canaries: [drs_metadata, trs_descriptions, workflow_comments, service_info]
   flavor: de.NBI mini
+  frontend: openwebui
   smoke_test: false

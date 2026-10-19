@@ -7,4 +7,4 @@ After=coder.service
 Type=oneshot
 User=ubuntu
 EnvironmentFile=/etc/sperange/sync.env
-ExecStart=/home/ubuntu/sperange/coder/deploy/sync-template.sh
+ExecStart=/home/ubuntu/sperange/platform/coder/deploy/sync-template.sh
