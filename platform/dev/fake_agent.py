@@ -23,7 +23,7 @@ from spe_agent.app import create_app
 from spe_agent.config import Config, Secrets
 from spe_agent.sandbox import SandboxClient
 
-FIXTURE = Path(__file__).resolve().parents[1] / "agent" / "tests" / "fixtures" / "open-terminal-0.12.4-openapi.json"
+FIXTURE = Path(__file__).resolve().parents[1] / "agui" / "pydantic-ai-agent" / "tests" / "fixtures" / "open-terminal-0.12.4-openapi.json"
 
 
 def fake_sandbox(request: httpx.Request) -> httpx.Response:
