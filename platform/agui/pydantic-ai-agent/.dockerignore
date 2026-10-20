@@ -1,0 +1,12 @@
+# Build context: pyproject.toml, uv.lock, src/, tests/ only.
+*
+!pyproject.toml
+!uv.lock
+!src/
+!tests/
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+**/.env
+**/*.env
+**/runs.jsonl

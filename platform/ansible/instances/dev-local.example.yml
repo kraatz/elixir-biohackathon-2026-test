@@ -1,0 +1,21 @@
+# The development VM configures itself. Copy to dev-local.yml (ignored by the
+# repository, mode 0600) and set spe_seed. Generate the dummy dataset first
+# (platform/dev/make_dummy_dataset.py).
+spe_instance: dev-local
+spe_seed: null                       # set a throwaway integer in your copy
+spe_provision: existing
+spe_existing_host: localhost
+spe_existing_api_ip: 100.96.0.2      # this VM's own IP: hostname -I | cut -d' ' -f1
+spe_manage_docker: false             # agentvm runs Docker (data-root /storage/docker); leave it alone
+spe_source_data_root: /home/agentvm/spe-dummy-data
+spe_workflows: [wes-drs-smoke]       # gatk-hc-chr20 needs real genomes
+spe_frontend: agui
+# The model is this development VM's choice, not a requirement: the de.NBI endpoint
+# is internal, so this VM uses Anthropic, with the cheap claude-haiku-5-5 to keep test
+# spend low. Your setup may use any OpenAI-compatible API instead
+# (spe_agent_model_provider: openai_compatible, spe_agent_base_url, spe_agent_model).
+# Export the key before running, here: set -a; . ~/.config/spe-dev/llm.env; set +a
+spe_agent_model_provider: anthropic
+spe_agent_model: claude-haiku-5-5
+spe_agent_allowed_models: [claude-haiku-5-5]   # this VM's spend guard: refuse any other model
+spe_agui_smoke: false                # true makes one paid model call per create/verify run

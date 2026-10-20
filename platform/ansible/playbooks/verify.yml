@@ -9,15 +9,21 @@
       ansible.builtin.set_fact:
         handoff: "{{ lookup('file', spe_output_dir ~ '/hosts.yml') | from_yaml }}"
     - name: Register host
+      # Connect the way create.yml did: through the recorded SSH target on an
+      # existing VM, through the generated key on one created in OpenStack.
       ansible.builtin.add_host:
         name: "{{ spe_instance }}-api"
         groups: spe_api
-        ansible_host: "{{ handoff.floating_ip if spe_connect_via == 'floating' else handoff.api_host }}"
+        ansible_host: "{{ handoff.ssh_target if existing else (handoff.floating_ip if spe_connect_via == 'floating' else handoff.api_host) }}"
+        ansible_connection: "{{ 'local' if existing and handoff.ssh_target in ['localhost', '127.0.0.1'] else 'ssh' }}"
         ansible_user: "{{ spe_ssh_user }}"
-        ansible_ssh_private_key_file: "{{ spe_output_dir }}/ssh_key"
-        ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        ansible_ssh_private_key_file: "{{ handoff.ssh_key | default(omit, true) }}"
+        ansible_ssh_common_args: "{{ handoff.ssh_args if existing else '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null' }}"
+        ansible_python_interpreter: /usr/bin/python3
         spe_api_host: "{{ handoff.api_host }}"
         spe_floating_ip: "{{ handoff.floating_ip }}"
+      vars:
+        existing: "{{ handoff.provision | default('openstack') == 'existing' }}"
       changed_when: false
 
 - name: Verify

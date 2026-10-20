@@ -1,0 +1,175 @@
+---
+# AG-UI agent frontend: chat-ui (Next.js + CopilotKit), agent (Pydantic AI over AG-UI,
+# the only holder of the LLM key) and sandbox (open-terminal) in compose project
+# spe-frontend. Runs after the workflow stack, like the openwebui role.
+- name: AG-UI frontend settings are valid
+  ansible.builtin.assert:
+    that:
+      - spe_agent_model_provider in ['openai_compatible', 'anthropic']
+      - spe_agent_model is string and spe_agent_model | length > 0
+      - spe_agent_allowed_models | length == 0 or spe_agent_model in spe_agent_allowed_models
+      - spe_agent_model_provider != 'openai_compatible' or (spe_agent_base_url | default('', true) | length > 0)
+      - spe_agent_tool_surface == 'shell'
+      - spe_agent_max_output_bytes | int > 0
+      - spe_agent_request_limit | int > 0
+      - spe_agent_tool_calls_limit | int > 0
+      - spe_agent_total_tokens_limit | int > 0
+      - spe_agui_ui_port | int != spe_agui_agent_port | int
+      - (spe_agui_ui_port | int) not in [443, spe_webui_local_port | int]
+      - (spe_agui_agent_port | int) not in [443, spe_webui_local_port | int]
+    fail_msg: >-
+      Invalid AG-UI settings: provider openai_compatible (needs spe_agent_base_url) or
+      anthropic; spe_agent_model must be one of spe_agent_allowed_models when that list is
+      set; tool surface shell; positive limits and output cap; two distinct free ports.
+
+- name: LLM key present
+  ansible.builtin.assert:
+    that: (spe_agent_llm_key | default('', true) | trim | length) > 0
+    fail_msg: >-
+      The agent's LLM key is empty. Export SPE_LLM_API_KEY on the controller (any
+      provider), or DENBI_LLM_API_KEY (openai_compatible) / ANTHROPIC_API_KEY (anthropic).
+      Never commit it.
+    quiet: true
+
+- name: Sandbox image (open-terminal with the SPE CA and runbook)
+  ansible.builtin.include_role:
+    name: sandbox
+
+# --- build contexts: only files tracked by git, staged on the controller ----
+- name: Staging directory on the controller
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: agui-build
+  register: agui_stage
+  delegate_to: localhost
+  changed_when: false
+
+- name: Tracked agent and chat UI sources, staged
+  ansible.builtin.shell: |
+    set -euo pipefail
+    git -C {{ spe_agui_source_dir | quote }} ls-files -z -- pydantic-ai-agent copilotkit-chat \
+      | rsync -a --from0 --files-from=- {{ (spe_agui_source_dir ~ '/') | quote }} {{ (agui_stage.path ~ '/') | quote }}
+    for c in pydantic-ai-agent copilotkit-chat; do
+      (cd {{ agui_stage.path | quote }}/$c && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)
+    done
+  args:
+    executable: /bin/bash
+  register: agui_hashes
+  delegate_to: localhost
+  changed_when: false
+
+- name: Image tags from the content of each build context
+  ansible.builtin.set_fact:
+    agui_agent_image: "spe-agent:{{ agui_hashes.stdout_lines[0] }}"
+    agui_ui_image: "spe-chat-ui:{{ agui_hashes.stdout_lines[1] }}"
+
+- name: Build directory
+  ansible.builtin.file:
+    path: "{{ spe_agui_build_dir }}"
+    state: directory
+    owner: "{{ spe_ssh_user }}"
+    group: "{{ spe_ssh_user }}"
+    mode: "0750"
+
+- name: Build contexts on the VM
+  ansible.posix.synchronize:
+    src: "{{ agui_stage.path }}/{{ item }}/"
+    dest: "{{ spe_agui_build_dir }}/{{ item }}/"
+    delete: true
+    checksum: true
+    use_ssh_args: true
+  loop: [pydantic-ai-agent, copilotkit-chat]
+
+- name: Staging directory removed
+  ansible.builtin.file:
+    path: "{{ agui_stage.path }}"
+    state: absent
+  delegate_to: localhost
+  changed_when: false
+
+- name: Agent and chat UI images (rebuilt only when their sources change)
+  community.docker.docker_image:
+    name: "{{ item.image.split(':')[0] }}"
+    tag: "{{ item.image.split(':')[1] }}"
+    build:
+      path: "{{ spe_agui_build_dir }}/{{ item.dir }}"
+      pull: false
+    source: build
+  loop:
+    - { image: "{{ agui_agent_image }}", dir: pydantic-ai-agent }
+    - { image: "{{ agui_ui_image }}", dir: copilotkit-chat }
+  loop_control:
+    label: "{{ item.image }}"
+
+# --- configuration ------------------------------------------------------------
+- name: Agent configuration (serialised, not interpolated)
+  ansible.builtin.set_fact:
+    agui_agent_config:
+      model: >-
+        {{ {'provider': spe_agent_model_provider, 'name': spe_agent_model}
+           | combine({'base_url': spe_agent_base_url} if spe_agent_model_provider == 'openai_compatible' else {})
+           | combine({'allowed_models': spe_agent_allowed_models} if spe_agent_allowed_models | length > 0 else {}) }}
+      prompt:
+        file: /etc/spe-agent/system_prompt.txt
+        include_sandbox_prompt: "{{ spe_agent_include_sandbox_prompt | bool }}"
+      tools:
+        surface: "{{ spe_agent_tool_surface }}"
+        sandbox_url: http://sandbox:8000
+        sandbox_operations: "{{ spe_agent_sandbox_operations }}"
+        max_output_bytes: "{{ spe_agent_max_output_bytes | int }}"
+      limits:
+        request_limit: "{{ spe_agent_request_limit | int }}"
+        tool_calls_limit: "{{ spe_agent_tool_calls_limit | int }}"
+        total_tokens_limit: "{{ spe_agent_total_tokens_limit | int }}"
+
+- name: Hash of what the agent reads from bind mounts
+  ansible.builtin.set_fact:
+    agui_config_hash: >-
+      {{ ((agui_agent_config | to_json(sort_keys=true))
+          ~ lookup('ansible.builtin.file', playbook_dir ~ '/../roles/sandbox/files/system_prompt.txt'))
+         | hash('sha256') }}
+
+- name: agent.yaml
+  ansible.builtin.copy:
+    content: "# Managed by spe-ansible (role: agui).\n{{ agui_agent_config | to_nice_yaml(sort_keys=false) }}"
+    dest: "{{ spe_frontend_dir }}/agent.yaml"
+    owner: "{{ spe_ssh_user }}"
+    group: "{{ spe_ssh_user }}"
+    mode: "0644"
+
+- name: Secret-bearing env files and compose file
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ spe_frontend_dir }}/{{ item.dest }}"
+    owner: "{{ spe_ssh_user }}"
+    group: "{{ spe_ssh_user }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: agent.env.j2, dest: agent.env, mode: "0600" }
+    - { src: chat-ui.env.j2, dest: chat-ui.env, mode: "0600" }
+    - { src: "{{ role_path }}/../openwebui/templates/terminal.env.j2", dest: terminal.env, mode: "0600" }
+    - { src: docker-compose.yml.j2, dest: docker-compose.yml, mode: "0640" }
+  loop_control:
+    label: "{{ item.dest }}"
+  no_log: true
+
+- name: Validate compose file
+  ansible.builtin.command: docker compose -f docker-compose.yml config --quiet
+  args:
+    chdir: "{{ spe_frontend_dir }}"
+  changed_when: false
+
+# Same project as the openwebui role: remove_orphans replaces its containers; its
+# open-webui-data volume is left in place.
+- name: Frontend stack up
+  community.docker.docker_compose_v2:
+    project_src: "{{ spe_frontend_dir }}"
+    files: [docker-compose.yml]
+    state: present
+    remove_orphans: true
+    recreate: auto
+
+- name: No-cost checks (the verify role repeats them and adds the smoke run)
+  ansible.builtin.include_tasks: checks.yml
+  vars:
+    agui_run_smoke: false

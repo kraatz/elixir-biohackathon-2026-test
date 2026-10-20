@@ -1,8 +1,13 @@
 ---
 # Tear down one instance. The output directory (canary record!) is kept.
+#   openstack: deletes the server, its volume and floating IP, the security group and keypair.
+#   existing:  never deletes the VM; resets it (compose stacks down with their volumes,
+#              instance directories, CA anchor, marker and manifest removed). Requires
+#              -e spe_confirm_reset=<instance>; see roles/existing_host/files/spe_preflight.py
+#              (reset mode) for what is checked before anything is removed.
 #   ansible-playbook playbooks/destroy.yml -e @instances/<name>.yml
 # The run (chats, report, parameters) is archived first; if that fails nothing
-# is deleted. -e spe_archive_skip=true destroys without archiving.
+# is deleted or reset. -e spe_archive_skip=true destroys without archiving.
 - name: Archive the run
   ansible.builtin.import_playbook: archive.yml
 
@@ -10,30 +15,171 @@
   hosts: localhost
   gather_facts: false
   tasks:
-    - name: Instance name present
+    - name: Instance parameters present
       ansible.builtin.assert:
-        that: spe_instance is string and spe_instance | length > 0
+        that:
+          - spe_instance is string and spe_instance | length > 0
+          - spe_provision in ['openstack', 'existing']
+        fail_msg: "set spe_instance (pass -e @instances/<name>.yml); spe_provision is openstack or existing"
 
-    - name: Server (and its boot volume, floating IP)
-      openstack.cloud.server:
-        cloud: "{{ spe_cloud }}"
-        name: "{{ spe_instance }}-api"
-        delete_ips: true
-        wait: true
-        state: absent
+    - name: Hand-off file from creation
+      ansible.builtin.stat:
+        path: "{{ spe_output_dir }}/hosts.yml"
+      register: handoff_file
 
-    - name: Security group
-      openstack.cloud.security_group:
-        cloud: "{{ spe_cloud }}"
-        name: "{{ spe_instance }}-sg"
-        state: absent
+    - name: Read hand-off file
+      ansible.builtin.set_fact:
+        handoff: "{{ lookup('ansible.builtin.file', spe_output_dir ~ '/hosts.yml') | from_yaml }}"
+      when: handoff_file.stat.exists
 
-    - name: Keypair
-      openstack.cloud.keypair:
-        cloud: "{{ spe_cloud }}"
-        name: "{{ spe_instance }}-key"
-        state: absent
+    # A changed instance file must not turn a reset into a deletion, or the reverse.
+    - name: Hand-off agrees with the instance file
+      ansible.builtin.assert:
+        that:
+          - handoff.instance | default(spe_instance) == spe_instance
+          - handoff.provision | default('openstack') == spe_provision
+        fail_msg: >-
+          {{ spe_output_dir }}/hosts.yml records instance '{{ handoff.instance | default('?') }}'
+          created with spe_provision '{{ handoff.provision | default('openstack') }}', but this run
+          asks for '{{ spe_instance }}' with '{{ spe_provision }}'. Nothing destroyed.
+      when: handoff_file.stat.exists
+
+    - name: OpenStack teardown
+      when: spe_provision == 'openstack'
+      block:
+        - name: Server (and its boot volume, floating IP)
+          openstack.cloud.server:
+            cloud: "{{ spe_cloud }}"
+            name: "{{ spe_instance }}-api"
+            delete_ips: true
+            wait: true
+            state: absent
+
+        - name: Security group
+          openstack.cloud.security_group:
+            cloud: "{{ spe_cloud }}"
+            name: "{{ spe_instance }}-sg"
+            state: absent
+
+        - name: Keypair
+          openstack.cloud.keypair:
+            cloud: "{{ spe_cloud }}"
+            name: "{{ spe_instance }}-key"
+            state: absent
+
+    - name: Existing host to reset
+      when: spe_provision == 'existing'
+      block:
+        - name: Confirmation given
+          ansible.builtin.assert:
+            that: (spe_confirm_reset | default('')) == spe_instance
+            fail_msg: >-
+              Resetting removes this instance's stacks, volumes and data from the host.
+              Re-run with -e spe_confirm_reset={{ spe_instance }}
+        - name: Hand-off file present
+          ansible.builtin.assert:
+            that: handoff_file.stat.exists and handoff.ssh_target | default('') | length > 0
+            fail_msg: "{{ spe_output_dir }}/hosts.yml with ssh_target is needed to find the host; nothing reset"
+        - name: Register host
+          ansible.builtin.add_host:
+            name: "{{ spe_instance }}-api"
+            groups: spe_reset
+            ansible_host: "{{ handoff.ssh_target }}"
+            ansible_connection: "{{ 'local' if handoff.ssh_target in ['localhost', '127.0.0.1'] else 'ssh' }}"
+            ansible_user: "{{ spe_ssh_user }}"
+            ansible_ssh_private_key_file: "{{ handoff.ssh_key | default(omit, true) }}"
+            ansible_ssh_common_args: "{{ handoff.ssh_args | default('', true) }}"
+            ansible_python_interpreter: /usr/bin/python3
+          changed_when: false
 
     - name: Note
       ansible.builtin.debug:
         msg: "{{ spe_output_dir }} kept (canary record, ssh key). Remove it by hand when no longer needed."
+
+- name: Reset the existing host
+  hosts: spe_reset
+  gather_facts: false
+  vars:
+    spe_ca_anchor: /usr/local/share/ca-certificates/spe-local-ca.crt
+  tasks:
+    - name: Passwordless sudo
+      ansible.builtin.command: sudo -n true
+      changed_when: false
+
+    - name: What this instance owns here
+      # Read-only. Refuses on any mismatch with the marker and manifest from creation.
+      ansible.builtin.script:
+        cmd: >-
+          {{ playbook_dir }}/../roles/existing_host/files/spe_preflight.py
+          {{ spe_reset_cfg | to_json | b64encode }}
+        executable: python3
+      vars:
+        spe_reset_cfg:
+          mode: reset
+          instance: "{{ spe_instance }}"
+          provision: "{{ spe_provision }}"
+          marker: /etc/spe-instance
+          manifest: /etc/spe-instance.json
+          paths:
+            stack_dir: "{{ spe_stack_dir }}"
+            frontend_dir: "{{ spe_frontend_dir }}"
+            data_root: "{{ spe_data_root }}"
+          projects:
+            workflow-stack: "{{ spe_stack_dir }}/deployment/compose.install.yaml"
+            spe-frontend: "{{ spe_frontend_dir }}/docker-compose.yml"
+          # On the controller itself, never touch the base dataset or the output directory.
+          shared: "{{ [spe_source_data_root, spe_output_root] if ansible_connection == 'local' else [] }}"
+      register: spe_reset_run
+      changed_when: false
+
+    - name: Reset plan
+      ansible.builtin.set_fact:
+        spe_reset: "{{ spe_reset_run.stdout | from_json }}"
+
+    - name: Host belongs to this instance and only owned things are removed
+      ansible.builtin.assert:
+        that: spe_reset.problems | length == 0
+        fail_msg: "{{ inventory_hostname }} not reset, nothing changed: {{ spe_reset.problems | join('; ') }}"
+
+    - name: Compose stacks down, with their volumes
+      ansible.builtin.command:
+        argv: [docker, compose, -p, "{{ item.name }}", -f, "{{ item.file }}", down, -v, --remove-orphans]
+      loop: "{{ spe_reset.projects }}"
+      loop_control:
+        label: "{{ item.name }}"
+      changed_when: true
+
+    - name: No containers left in this instance's compose projects
+      ansible.builtin.command:
+        argv: [docker, ps, -aq, --filter, "label=com.docker.compose.project={{ item }}"]
+      loop: "{{ spe_compose_projects }}"
+      register: leftover
+      changed_when: false
+      failed_when: leftover.stdout | trim | length > 0
+
+    - name: Instance directories removed
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ spe_reset.paths }}"
+      become: true
+
+    - name: Instance CA anchor removed
+      ansible.builtin.file:
+        path: "{{ spe_ca_anchor }}"
+        state: absent
+      become: true
+      register: ca_anchor
+
+    - name: CA store without this instance's anchor
+      ansible.builtin.command: update-ca-certificates
+      become: true
+      when: ca_anchor.changed
+
+    # Last: while these exist, a failed reset can be re-run.
+    - name: Ownership manifest and marker removed
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: [/etc/spe-instance.json, /etc/spe-instance]
+      become: true

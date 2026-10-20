@@ -1,4 +1,4 @@
-# Managed by spe-ansible (role: openwebui). Build context: the role's frontend dir.
+# Managed by spe-ansible (role: sandbox). Build context: the frontend dir.
 # Adds the SPE instance's own self-signed CA so the agent's HTTPS calls to
 # WES/DRS/TRS verify against it (never --insecure), and bakes in the runbook.
 FROM ghcr.io/open-webui/open-terminal:0.12.4

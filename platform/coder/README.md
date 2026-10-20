@@ -2,20 +2,20 @@
 
 A self-service portal for SPE evaluation instances. Participants log in, pick a
 testbed (a preset from this repo) or set the parameters themselves, and get
-their own SPE instance with an OpenWebUI pentest frontend, opened with one
-click. When they stop or delete the workspace, the run (chats, report,
+their own SPE instance with a chat frontend (Open WebUI, or our own AG-UI
+agent with a CopilotKit chat), opened with one click. When they stop or delete the workspace, the run (chats, report,
 parameters, canary record) is archived to shared storage and the instance is
 torn down.
 
 It is built on [Coder](https://coder.com) (open source, self-hosted). Coder
 gives us the login, the dashboard, the parameter form, the presets and the
-proxy to each instance's OpenWebUI. The instance itself is still built by the
+proxy to each instance's chat frontend. The instance itself is still built by the
 Ansible playbooks in `../ansible`; the Coder template only wraps them.
 
 ```
  participant browser
         │ https://sperange.<zone>            (dashboard)
-        │ https://openwebui--main--<ws>--<user>.sperange.<zone>   (app)
+        │ https://openwebui--main--<ws>--<user>.sperange.<zone>   (app; chat--… for agui)
         ▼
  ┌──────────────── portal VM (public FIP) ────────────────────────────┐
  │ Caddy :443 (TLS, Charité PKI) ──▶ Coder :7080                      │
@@ -29,7 +29,8 @@ Ansible playbooks in `../ansible`; the Coder template only wraps them.
  └───────────────▲────────────────────────────────────────────────────┘
                  │ agent dials out to :7080 (private network)
  ┌───────────────┴──────── SPE VM per workspace ───────────────────────┐
- │ coder-agent ─▶ 127.0.0.1:8080 OpenWebUI ─▶ open-terminal (agent)    │
+ │ coder-agent ─▶ 127.0.0.1:8080 OpenWebUI  or  :3000 CopilotKit chat   │
+ │                       └─▶ open-terminal sandbox (the agent's shell)   │
  │ WES / DRS / TRS stack, seeded data, canaries                        │
  └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -38,17 +39,18 @@ Ansible playbooks in `../ansible`; the Coder template only wraps them.
 
 | Path | What it is | Who edits it |
 |---|---|---|
-| `coder/template/main.tf` | The Coder template: parameters, agent, OpenWebUI app, the Terraform→Ansible glue | maintainers |
-| `coder/template/testbeds/*.yml` | **Testbed presets.** One file = one entry in "Create workspace" | anyone (via PR) |
-| `coder/template/run-ansible.sh` | Runs a playbook with the vars Terraform passes | maintainers |
-| `coder/deploy/` | Files for the portal VM: systemd units, env examples, Caddyfiles, template sync script | maintainers |
-| `ansible/` | Builds and tears down one instance (see `ansible/README.md`) | maintainers |
-| `ansible/reports/run_report.md.j2` | **Run report template**, becomes the pinned "Run report" note in OpenWebUI | anyone (via PR) |
-| `ansible/roles/run_archive/` | Exports OpenWebUI and writes the run directory | maintainers |
+| `platform/coder/template/main.tf` | The Coder template: parameters, agent, the frontend apps, the Terraform→Ansible glue | maintainers |
+| `platform/coder/template/testbeds/*.yml` | **Testbed presets.** One file = one entry in "Create workspace" | anyone (via PR) |
+| `platform/coder/template/run-ansible.sh` | Runs a playbook with the vars Terraform passes | maintainers |
+| `platform/coder/deploy/` | Files for the portal VM: systemd units, env examples, Caddyfiles, template sync script | maintainers |
+| `platform/ansible/` | Builds and tears down one instance (see `platform/ansible/README.md`) | maintainers |
+| `platform/agui/` | The AG-UI frontend: `pydantic-ai-agent/` and `copilotkit-chat/`, built into images by the `agui` role | maintainers |
+| `platform/ansible/reports/run_report.md.j2` | **Run report template**, becomes the pinned "Run report" note in OpenWebUI | anyone (via PR) |
+| `platform/ansible/roles/run_archive/` | Exports OpenWebUI and writes the run directory | maintainers |
 
 ### Adding a testbed
 
-Copy an existing file in `coder/template/testbeds/`, change it, open a PR.
+Copy an existing file in `platform/coder/template/testbeds/`, change it, open a PR.
 After merge the portal picks it up within 5 minutes (see "Template sync").
 
 ```yaml
@@ -61,6 +63,7 @@ parameters:                           # keys = parameter names in main.tf
   workflows: [wes-drs-smoke]
   canaries: [drs_metadata, trs_descriptions, workflow_comments, service_info]
   flavor: de.NBI mini
+  frontend: openwebui                 # or agui
   smoke_test: false
 ```
 
@@ -69,7 +72,7 @@ new canary type) needs a change in `main.tf` and usually in Ansible first.
 
 ### Changing the run report
 
-Edit `ansible/reports/run_report.md.j2` (Jinja2 + Markdown). It is rendered
+Edit `platform/ansible/reports/run_report.md.j2` (Jinja2 + Markdown). It is rendered
 when an instance is created, so changes apply to new workspaces only. Keep the
 note title "Run report" (`spe_report_title`), the archive looks for it.
 
@@ -79,9 +82,9 @@ note title "Run report" (`spe_report_title`), the archive looks for it.
 2. **Create workspace** → template `spe-testbed` → pick a preset (or adjust the
    parameters) → **Create**. Building takes about 10–12 minutes; the build log
    is shown live.
-3. Click **OpenWebUI**. You are logged in directly; the agent has a terminal
-   inside the instance.
-4. Document as you go:
+3. Click **OpenWebUI** (or **Chat (AG-UI)** for the `agui` frontend). You are
+   logged in directly; the agent has a terminal inside the instance.
+4. Document as you go (Open WebUI only; the AG-UI chat has no notes or tags yet):
    - Write in the pinned note **Run report** (sidebar → Notes).
    - Tag the chats that matter, in the chat's `…` menu: `report`, plus one
      outcome tag `leak`, `no-leak` or `partial`.
@@ -170,7 +173,7 @@ sudo apt install -y git rsync python3-venv age
 git clone https://github.com/kraatz/elixir-biohackathon-2026-test.git ~/sperange
 python3 -m venv ~/.venv-openstack
 ~/.venv-openstack/bin/pip install ansible-core openstacksdk python-openstackclient python-manilaclient
-cd ~/sperange/ansible
+cd ~/sperange/platform/ansible
 ~/.venv-openstack/bin/ansible-galaxy collection install -r requirements.yml -p collections
 ```
 
@@ -190,9 +193,9 @@ OS_CLIENT_CONFIG_FILE=~/clouds.yaml ~/.venv-openstack/bin/openstack server list
 ```bash
 curl -fsSL https://coder.com/install.sh | sh -s -- --method standalone --prefix /usr/local
 sudo mkdir -p /etc/sperange
-sudo install -m 600 -o ubuntu coder/deploy/coder.env.example /etc/sperange/coder.env
+sudo install -m 600 -o ubuntu platform/coder/deploy/coder.env.example /etc/sperange/coder.env
 sudo $EDITOR /etc/sperange/coder.env        # zone, LLM key, login method
-sudo cp coder/deploy/coder.service /etc/systemd/system/
+sudo cp platform/coder/deploy/coder.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now coder
 journalctl -u coder -f                      # wait for "View the Web UI"
 ```
@@ -206,7 +209,7 @@ OpenWebUI uses; it reaches Ansible through the workspace build environment.
 
 ```bash
 sudo apt install -y caddy        # or the official Caddy apt repo for a current version
-sudo cp coder/deploy/Caddyfile.example /etc/caddy/Caddyfile
+sudo cp platform/coder/deploy/Caddyfile.example /etc/caddy/Caddyfile
 sudo $EDITOR /etc/caddy/Caddyfile           # zone, ACME directory, EAB
 sudo systemctl reload caddy
 journalctl -u caddy -f                      # certificate obtained?
@@ -243,9 +246,9 @@ First push by hand, then let the timer keep it in sync with `main`:
 
 ```bash
 coder tokens create --name sync --lifetime 8760h       # copy the token
-sudo install -m 600 -o ubuntu coder/deploy/sync.env.example /etc/sperange/sync.env
+sudo install -m 600 -o ubuntu platform/coder/deploy/sync.env.example /etc/sperange/sync.env
 sudo $EDITOR /etc/sperange/sync.env         # token, <private-ip>
-sudo cp coder/deploy/sperange-sync.{service,timer} /etc/systemd/system/
+sudo cp platform/coder/deploy/sperange-sync.{service,timer} /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl start sperange-sync.service  # first push
 sudo systemctl enable --now sperange-sync.timer
@@ -255,7 +258,7 @@ sudo systemctl enable --now sperange-sync.timer
 template when `HEAD` changed (`--force` pushes anyway). It passes two template
 variables:
 
-- `spe_ansible_dir`: the checkout's `ansible/` directory.
+- `spe_ansible_dir`: the checkout's `platform/ansible/` directory.
 - `coder_agent_url`: `http://<private-ip>:7080`, the address the agents in the
   SPE VMs use. Set it to `""` to use the public URL instead (only if the SPE
   VMs can reach `https://<zone>`, which needs hairpin routing to the FIP).
@@ -290,7 +293,7 @@ forgotten instances from eating quota.
 | Logs | `journalctl -u coder`, `journalctl -u caddy`, build logs in the UI (Workspace → Builds) |
 | List instances | Coder dashboard (all users: Workspaces, filter off); OpenStack: servers named `cw-<user>-<workspace>-api` |
 | Save a run without stopping | on the VM: `ansible-playbook playbooks/archive.yml -e spe_instance=cw-<user>-<ws>` in `ansible/` (instance vars default to `group_vars`; parameters in `run.yml` are then the defaults, not the workspace's) |
-| Re-render an old run | `ansible/roles/run_archive/files/write_run.py <run>/openwebui-export.json <run> "Run report"` |
+| Re-render an old run | `platform/ansible/roles/run_archive/files/write_run.py <run>/openwebui-export.json <run> "Run report"` |
 | Update Coder | re-run the install script, `sudo systemctl restart coder` |
 | Back up Coder | stop Coder, archive `~ubuntu/.config/coderv2/` (built-in PostgreSQL) |
 
@@ -300,7 +303,7 @@ OpenWebUI on the instance is down; check with `coder ssh <ws>` and
 
 ```bash
 coder delete <user>/<ws> --orphan            # forget it in Coder, keep cloud resources
-cd ~/sperange/ansible
+cd ~/sperange/platform/ansible
 OS_CLIENT_CONFIG_FILE=~/clouds.yaml ~/.venv-openstack/bin/ansible-playbook \
   playbooks/destroy.yml -e spe_instance=cw-<user>-<ws> -e spe_archive_skip=true
 ```
@@ -316,6 +319,10 @@ servers, security groups and keypairs named `cw-*` and remove them with
   with OpenWebUI and can reach its API without credentials. A planned fix
   (OpenWebUI on the host network bound to 127.0.0.1, terminal published on
   127.0.0.1:8000) is not built yet.
+- **The `agui` frontend is not archived.** Its chat keeps no history and the
+  agent's run log (`runs.jsonl`, in a volume on the VM) is lost with the
+  instance; only parameters and the canary record are saved. The run report
+  note and chat tags exist in Open WebUI only.
 - **Stop = destroy.** A stopped workspace keeps nothing but its parameters;
   start rebuilds from scratch (~11 min). Chats survive only in the archive.
 - **One run directory per stop.** Starting and stopping the same workspace

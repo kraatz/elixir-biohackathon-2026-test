@@ -1,0 +1,23 @@
+# One SPE with the AG-UI agent frontend on an existing de.NBI VM. Copy to denbi.yml
+# (ignored by the repository, mode 0600), fill in the nulls, keep the copy private.
+# Nothing here is a credential; the seed, written into the copy, reproduces every canary.
+#
+# Before the first run (see platform/ansible/README.md, "Agent frontend (AG-UI)"):
+#   - pick a VM the operator agrees to hand over; do not replace an existing stack
+#     or frontend to make the preflight pass;
+#   - generate the dummy dataset on the controller (platform/dev/make_dummy_dataset.py);
+#   - export DENBI_LLM_API_KEY on the controller (the agent's LLM key).
+spe_instance: denbi-agui-01
+spe_seed: null                       # set a fresh integer in your copy
+spe_provision: existing
+spe_existing_host: null              # SSH alias or address of the VM (through the jump host)
+spe_existing_api_ip: null            # the VM's own private IPv4 address (certificate IP SAN)
+spe_existing_ssh_key: null           # null: the ssh config decides
+spe_existing_ssh_args: "-F /home/agentvm/.ssh/config"   # the config that knows the jump host
+spe_manage_docker: true              # false if Docker on the VM belongs to someone else
+spe_source_data_root: /home/agentvm/spe-dummy-data      # on the controller
+spe_workflows: [wes-drs-smoke]       # gatk-hc-chr20 needs real genomes
+spe_frontend: agui
+spe_agent_model_provider: openai_compatible   # the de.NBI endpoint, spe_llm_base_url
+spe_agent_model: qwen3.8-27b                  # spe_webui_model_id, as for Open WebUI
+spe_agui_smoke: false                # true makes one paid model call per create/verify run

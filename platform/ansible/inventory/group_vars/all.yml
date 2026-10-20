@@ -21,6 +21,25 @@ spe_extra_authorized_keys: [] # public keys added to the ubuntu user besides the
 spe_ssh_user: ubuntu
 spe_connect_via: private      # private | floating: which address the controller uses for SSH
 
+# --- provisioning -------------------------------------------------------------
+# openstack: create the VM (keypair, security group, server, floating IP).
+# existing:  configure a VM that already exists; nothing in OpenStack is touched.
+spe_provision: openstack
+spe_existing_host: null       # existing: SSH target (alias from ~/.ssh/config or address), or localhost
+spe_existing_api_ip: null     # existing: the VM's own IP; becomes spe_api_host (certificate IP SAN)
+spe_existing_ssh_key: null    # existing: private key on the controller; null lets the ssh config decide
+spe_existing_ssh_args: ""     # existing: extra ssh args, e.g. "-F /home/agentvm/.ssh/config"
+spe_min_free_gb: 15           # existing: refuse a host with less free disk (data and Docker filesystems)
+spe_manage_docker: true       # false: Docker belongs to someone else on this host; base leaves it alone
+# What this instance occupies on a host: checked before an existing host is
+# configured, recorded in /etc/spe-instance.json, and the only things destroy.yml resets.
+spe_compose_projects: [workflow-stack, spe-frontend]
+spe_frontend_ports: >-
+  {{ {'openwebui': [spe_webui_local_port],
+      'agui': [spe_agui_ui_port, spe_agui_agent_port]}.get(spe_frontend, []) }}
+spe_owned_ports: >-
+  {{ dict([['443', 'workflow-stack']] + (spe_frontend_ports | map('string') | product(['spe-frontend']) | list)) }}
+
 # --- controller-side paths ---------------------------------------------------
 spe_output_root: "{{ playbook_dir }}/../output"
 spe_output_dir: "{{ spe_output_root }}/{{ spe_instance }}"
@@ -80,9 +99,9 @@ spe_run_smoke_test: true
 
 # --- frontend (pentest chat UI) ---------------------------------------------
 # A chat frontend runs inside the VM so an operator can drive the LLM agent
-# against this instance's own SPE. OpenWebUI is the only frontend today; set
-# spe_frontend to something else (and add a matching role) to swap it out, or
-# to "" / "none" to deploy no frontend.
+# against this instance's own SPE: openwebui (Open WebUI runs the agent loop),
+# agui (our own agent over AG-UI with a CopilotKit chat, see below), or none.
+# Both use compose project spe-frontend, so switching replaces one with the other.
 spe_frontend: openwebui
 spe_frontend_dir: "/home/{{ spe_ssh_user }}/spe-frontend"
 spe_frontend_webui_image: ghcr.io/open-webui/open-webui:v0.11.3
@@ -135,3 +154,34 @@ spe_archive_skip: false
 # The model id OpenWebUI serves from the de.NBI endpoint; the system prompt is
 # attached to it so every chat gets it by default.
 spe_webui_model_id: qwen3.8-27b
+
+# --- AG-UI agent frontend (spe_frontend: agui) ------------------------------
+# Three containers in compose project spe-frontend: chat-ui (Next.js + CopilotKit),
+# agent (Pydantic AI over AG-UI; the only holder of the LLM key) and sandbox
+# (the open-terminal image built by role sandbox). Ports bound to 127.0.0.1.
+spe_agui_ui_port: 3000
+spe_agui_agent_port: 8100
+spe_agui_smoke: false                # true: one LLM-backed AG-UI run in the checks (a paid call)
+spe_agui_source_dir: "{{ playbook_dir }}/../../agui"   # platform/agui on the controller: pydantic-ai-agent/ and copilotkit-chat/
+spe_agui_build_dir: "{{ spe_frontend_dir }}/build"
+spe_agent_model_provider: openai_compatible       # openai_compatible (any OpenAI-compatible API) | anthropic
+spe_agent_model: "{{ spe_webui_model_id }}"
+spe_agent_base_url: "{{ spe_llm_base_url }}"      # openai_compatible only
+# Optional guard, any provider: when non-empty, the role and the agent accept only these
+# model names, so a typo cannot select a pricier model. Empty: no restriction.
+spe_agent_allowed_models: []
+# The LLM key never enters the repo. It comes from the controller's environment:
+# SPE_LLM_API_KEY for any provider; if that is unset, DENBI_LLM_API_KEY
+# (openai_compatible, as for openwebui) or ANTHROPIC_API_KEY (anthropic).
+spe_agent_llm_key: >-
+  {{ lookup('ansible.builtin.env', 'SPE_LLM_API_KEY')
+     or (spe_denbi_api_key if spe_agent_model_provider == 'openai_compatible'
+         else lookup('ansible.builtin.env', 'ANTHROPIC_API_KEY')) }}
+spe_agent_tool_surface: shell
+spe_agent_sandbox_operations: all    # or a list of open-terminal operationIds
+spe_agent_include_sandbox_prompt: true
+spe_agent_max_output_bytes: 16384
+spe_agent_request_limit: 50          # per run, not an aggregate budget
+spe_agent_tool_calls_limit: 100
+spe_agent_total_tokens_limit: 400000
+spe_agent_api_key: "{{ (spe_seed | string ~ ':agent-api') | hash('sha256') }}"

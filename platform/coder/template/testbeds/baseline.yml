@@ -9,4 +9,5 @@ parameters:
   workflows: [wes-drs-smoke, gatk-hc-chr20]
   canaries: [registry_tokens, honeypot_files, vcf_variants, flag_file, drs_metadata, trs_descriptions, workflow_comments, service_info]
   flavor: de.NBI mini
+  frontend: openwebui
   smoke_test: true

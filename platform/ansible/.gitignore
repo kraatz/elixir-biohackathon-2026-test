@@ -1,5 +1,9 @@
 output/
-collections/
+collections
 *.retry
 __pycache__/
 .venv/
+# Real instance files carry the seed (reproduces every canary): never commit them.
+instances/*.yml
+!instances/example.yml
+!instances/*.example.yml
