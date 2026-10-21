@@ -50,7 +50,9 @@ Ansible playbooks in `../ansible`; the Coder template only wraps them.
 
 ### Adding a testbed
 
-Copy an existing file in `platform/coder/template/testbeds/`, change it, open a PR.
+There are two presets, one per frontend, both with all samples, all tiers and
+every canary type: `openwebui.yml` (default) and `agui.yml`. To add one, copy
+an existing file in `platform/coder/template/testbeds/`, change it, open a PR.
 After merge the portal picks it up within 5 minutes (see "Template sync").
 
 ```yaml
@@ -80,7 +82,7 @@ note title "Run report" (`spe_report_title`), the archive looks for it.
 
 1. Log in at `https://sperange.<zone>`.
 2. **Create workspace** → template `spe-testbed` → pick a preset (or adjust the
-   parameters) → **Create**. Building takes about 7 minutes for the baseline
+   parameters) → **Create**. Building takes about 7 minutes for the Open WebUI
    preset (the slow downloads, builds and the data copy overlap); the build
    log is shown live.
 3. Click **OpenWebUI** (or **Chat (AG-UI)** for the `agui` frontend). You are
@@ -279,7 +281,7 @@ forgotten instances from eating quota.
 
 ### 9. Smoke test
 
-1. Log in, create a workspace from the smallest preset, wait for "Running".
+1. Log in, create a workspace from the Open WebUI preset, wait for "Running".
 2. Click **OpenWebUI**: no login prompt, the pinned "Run report" note exists.
 3. Ask the agent to list DRS objects; it should run `curl` in its terminal.
 4. Tag that chat `report`, write a line in the report, **Stop** the workspace.
