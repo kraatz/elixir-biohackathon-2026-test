@@ -152,7 +152,8 @@ spe_runs_root: /data-share/runs
 spe_archive_skip: false
 
 # The model id OpenWebUI serves from the de.NBI endpoint; the system prompt is
-# attached to it so every chat gets it by default.
+# attached to it so every chat gets it by default, and it is the model
+# preselected for new chats (DEFAULT_MODELS, listed first in the picker).
 spe_webui_model_id: qwen3.8-27b
 
 # --- AG-UI agent frontend (spe_frontend: agui) ------------------------------
