@@ -1,0 +1,102 @@
+---
+# Checks the AG-UI settings, stages the tracked agent and chat UI sources on
+# the VM and starts their image builds in the background (npm ci, next build,
+# uv sync and the agent's test suite take minutes). main.yml joins them.
+- name: AG-UI frontend settings are valid
+  ansible.builtin.assert:
+    that:
+      - spe_agent_model_provider in ['openai_compatible', 'anthropic']
+      - spe_agent_model is string and spe_agent_model | length > 0
+      - spe_agent_allowed_models | length == 0 or spe_agent_model in spe_agent_allowed_models
+      - spe_agent_model_provider != 'openai_compatible' or (spe_agent_base_url | default('', true) | length > 0)
+      - spe_agent_tool_surface == 'shell'
+      - spe_agent_max_output_bytes | int > 0
+      - spe_agent_request_limit | int > 0
+      - spe_agent_tool_calls_limit | int > 0
+      - spe_agent_total_tokens_limit | int > 0
+      - spe_agui_ui_port | int != spe_agui_agent_port | int
+      - (spe_agui_ui_port | int) not in [443, spe_webui_local_port | int]
+      - (spe_agui_agent_port | int) not in [443, spe_webui_local_port | int]
+    fail_msg: >-
+      Invalid AG-UI settings: provider openai_compatible (needs spe_agent_base_url) or
+      anthropic; spe_agent_model must be one of spe_agent_allowed_models when that list is
+      set; tool surface shell; positive limits and output cap; two distinct free ports.
+
+- name: LLM key present
+  ansible.builtin.assert:
+    that: (spe_agent_llm_key | default('', true) | trim | length) > 0
+    fail_msg: >-
+      The agent's LLM key is empty. Export SPE_LLM_API_KEY on the controller (any
+      provider), or DENBI_LLM_API_KEY (openai_compatible) / ANTHROPIC_API_KEY (anthropic).
+      Never commit it.
+    quiet: true
+
+# --- build contexts: only files tracked by git, staged on the controller ----
+- name: Staging directory on the controller
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: agui-build
+  register: agui_stage
+  delegate_to: localhost
+  changed_when: false
+
+- name: Tracked agent and chat UI sources, staged
+  ansible.builtin.shell: |
+    set -euo pipefail
+    git -C {{ spe_agui_source_dir | quote }} ls-files -z -- pydantic-ai-agent copilotkit-chat \
+      | rsync -a --from0 --files-from=- {{ (spe_agui_source_dir ~ '/') | quote }} {{ (agui_stage.path ~ '/') | quote }}
+    for c in pydantic-ai-agent copilotkit-chat; do
+      (cd {{ agui_stage.path | quote }}/$c && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)
+    done
+  args:
+    executable: /bin/bash
+  register: agui_hashes
+  delegate_to: localhost
+  changed_when: false
+
+- name: Image tags from the content of each build context
+  ansible.builtin.set_fact:
+    agui_agent_image: "spe-agent:{{ agui_hashes.stdout_lines[0] }}"
+    agui_ui_image: "spe-chat-ui:{{ agui_hashes.stdout_lines[1] }}"
+
+- name: Build directory
+  ansible.builtin.file:
+    path: "{{ spe_agui_build_dir }}"
+    state: directory
+    owner: "{{ spe_ssh_user }}"
+    group: "{{ spe_ssh_user }}"
+    mode: "0750"
+
+- name: Build contexts on the VM
+  ansible.posix.synchronize:
+    src: "{{ agui_stage.path }}/{{ item }}/"
+    dest: "{{ spe_agui_build_dir }}/{{ item }}/"
+    delete: true
+    checksum: true
+    use_ssh_args: true
+  loop: [pydantic-ai-agent, copilotkit-chat]
+
+- name: Staging directory removed
+  ansible.builtin.file:
+    path: "{{ agui_stage.path }}"
+    state: absent
+  delegate_to: localhost
+  changed_when: false
+
+- name: Agent and chat UI images, built in the background (only when their sources changed)
+  community.docker.docker_image:
+    name: "{{ item.image.split(':')[0] }}"
+    tag: "{{ item.image.split(':')[1] }}"
+    build:
+      path: "{{ spe_agui_build_dir }}/{{ item.dir }}"
+      pull: false
+    source: build
+  loop:
+    - { image: "{{ agui_agent_image }}", dir: pydantic-ai-agent }
+    - { image: "{{ agui_ui_image }}", dir: copilotkit-chat }
+  loop_control:
+    label: "{{ item.image }}"
+  async: 3600
+  poll: 0
+  register: agui_build_jobs
+  changed_when: false   # the join (main.yml) reports the change

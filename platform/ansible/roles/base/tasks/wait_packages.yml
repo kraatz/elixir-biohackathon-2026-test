@@ -1,0 +1,11 @@
+---
+# Joins the background install of the seeding tools started by main.yml.
+# Nothing to join when base did not run (e.g. --tags data on an instance).
+- name: Seeding tools installed
+  ansible.builtin.async_status:
+    jid: "{{ spe_apt_job.ansible_job_id }}"
+  register: spe_apt
+  until: spe_apt.finished
+  retries: 180
+  delay: 10
+  when: spe_apt_job is defined

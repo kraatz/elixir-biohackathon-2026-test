@@ -64,6 +64,12 @@
     label: "{{ item.item }}"
   when: "'genomes' in spe_tiers and not item.stat.exists"
 
+- name: Seeding tools installed (started by role base)
+  ansible.builtin.import_role:
+    name: base
+    tasks_from: wait_packages
+  become: true
+
 - name: Seed instance data (rename samples, registry, canaries, flag)
   ansible.builtin.command:
     argv: >-

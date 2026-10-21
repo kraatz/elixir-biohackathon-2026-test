@@ -19,6 +19,11 @@
     - { role: os_provision, tags: [always], when: spe_provision == 'openstack' }
     - { role: existing_host, tags: [always], when: spe_provision == 'existing' }
 
+# The VM's work runs in overlapping lanes. As soon as Docker is up, the package
+# install, the image pulls and the image builds (stack, sandbox, AG-UI) start in
+# the background; the data copy and the seeding run meanwhile; every consumer
+# joins the job it needs right before it needs it (the *_from: wait tasks).
+# Each tag still selects one stage for a re-run against an existing instance.
 - name: Configure the API instance
   hosts: spe_api
   gather_facts: false
@@ -79,14 +84,93 @@
         spe_svc_token_wes: "SVCINFO-{{ ((spe_seed | string ~ ':svc:wes') | hash('sha256'))[:10] | upper }}"
         spe_svc_token_drs: "SVCINFO-{{ ((spe_seed | string ~ ':svc:drs') | hash('sha256'))[:10] | upper }}"
         spe_svc_token_trs: "SVCINFO-{{ ((spe_seed | string ~ ':svc:trs') | hash('sha256'))[:10] | upper }}"
-  roles:
-    - { role: base, become: true, tags: [base] }
-    - { role: spe_data, tags: [data] }
-    - { role: workflow_stack, tags: [stack] }
-    - { role: drs_register, tags: [drs] }
-    - { role: trs_install, tags: [trs] }
-    - { role: openwebui, tags: [frontend], when: "spe_frontend == 'openwebui'" }
-    - { role: agui, tags: [frontend], when: "spe_frontend == 'agui'" }
-    - { role: coder_agent, become: true, tags: [coder], when: "spe_coder_agent_token is defined" }
-    - { role: handoff, tags: [handoff] }
-    - { role: verify, tags: [verify] }
+  tasks:
+    - name: Baseline (Docker, packages, directories; seeding tools in the background)
+      ansible.builtin.import_role:
+        name: base
+      become: true
+      tags: [base]
+
+    - name: Coder agent (first, so the portal shows the workspace connected early)
+      ansible.builtin.import_role:
+        name: coder_agent
+      become: true
+      tags: [coder]
+      when: spe_coder_agent_token is defined
+
+    - name: Image pulls in the background
+      ansible.builtin.import_role:
+        name: prefetch
+      tags: [stack, frontend]
+
+    - name: Certificate and trust anchor
+      ansible.builtin.import_role:
+        name: tls
+      tags: [stack, frontend]
+
+    - name: Sandbox image build in the background
+      ansible.builtin.import_role:
+        name: sandbox
+      tags: [frontend]
+      when: spe_frontend in ['openwebui', 'agui']
+
+    - name: Stack sources and image builds in the background
+      ansible.builtin.import_role:
+        name: workflow_stack
+        tasks_from: build
+      tags: [stack]
+
+    - name: Agent and chat UI image builds in the background
+      ansible.builtin.import_role:
+        name: agui
+        tasks_from: build
+      tags: [frontend]
+      when: spe_frontend == 'agui'
+
+    - name: Data copy and seeding
+      ansible.builtin.import_role:
+        name: spe_data
+      tags: [data]
+
+    - name: Data checksums in the background
+      ansible.builtin.import_role:
+        name: drs_register
+        tasks_from: hash
+      tags: [drs]
+
+    - name: Workflow stack
+      ansible.builtin.import_role:
+        name: workflow_stack
+      tags: [stack]
+
+    - name: DRS registration
+      ansible.builtin.import_role:
+        name: drs_register
+      tags: [drs]
+
+    - name: TRS workflows
+      ansible.builtin.import_role:
+        name: trs_install
+      tags: [trs]
+
+    - name: OpenWebUI frontend
+      ansible.builtin.import_role:
+        name: openwebui
+      tags: [frontend]
+      when: spe_frontend == 'openwebui'
+
+    - name: AG-UI frontend
+      ansible.builtin.import_role:
+        name: agui
+      tags: [frontend]
+      when: spe_frontend == 'agui'
+
+    - name: Hand-off files
+      ansible.builtin.import_role:
+        name: handoff
+      tags: [handoff]
+
+    - name: Verification
+      ansible.builtin.import_role:
+        name: verify
+      tags: [verify]

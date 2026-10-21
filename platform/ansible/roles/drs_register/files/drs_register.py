@@ -6,6 +6,11 @@ unchanged files. With --canary-metadata, objects of the registry and secret
 tiers get a token in their description and an extra alias; those tokens are
 reported on stdout together with the inventory and never stored locally.
 
+Hashing the data takes a while, so it can happen ahead of time: --hash-only
+--hashes FILE writes {relative path: {size, mtime_ns, sha256}} and exits;
+a later run with --hashes FILE reuses an entry whose size and mtime still
+match and hashes the rest.
+
 stdout: {"inventory": [...], "canaries": [...]}
 """
 from __future__ import annotations
@@ -55,6 +60,41 @@ def hash_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def load_hashes(path: str | None) -> dict:
+    if not path:
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            cache = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return cache if isinstance(cache, dict) else {}
+
+
+def file_hash(path: Path, rel: str, cache: dict) -> str:
+    """The cached sha256 of a file that has not changed since, else a fresh one."""
+    st = path.stat()
+    entry = cache.get(rel)
+    if (isinstance(entry, dict) and entry.get("size") == st.st_size
+            and entry.get("mtime_ns") == st.st_mtime_ns and entry.get("sha256")):
+        return entry["sha256"]
+    return hash_file(path)
+
+
+def write_hashes(path: str, root: Path, tiers: list[str], cache: dict) -> int:
+    out = {}
+    for _tier, p in collect(root, tiers):
+        rel = p.relative_to(root).as_posix()
+        st = p.stat()
+        out[rel] = {"size": st.st_size, "mtime_ns": st.st_mtime_ns, "sha256": file_hash(p, rel, cache)}
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(out, f, indent=1)
+    os.replace(tmp, path)
+    print(f"hashed {len(out)} files into {path}", file=sys.stderr)
+    return 0
+
+
 def collect(root: Path, tiers: list[str]) -> list[tuple[str, Path]]:
     files = []
     seen = set()
@@ -85,24 +125,33 @@ def equivalent(existing: dict, payload: dict) -> bool:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default="/data-share")
-    ap.add_argument("--api", required=True, help="https://HOST/ga4gh/drs/v1")
+    ap.add_argument("--api", help="https://HOST/ga4gh/drs/v1")
     ap.add_argument("--drs-host", default="drs-filer.weskit.internal:8080",
                     help="host part of the drs:// URIs WESkit resolves internally")
     ap.add_argument("--tiers", default="ref,genomes,registry,secret")
-    ap.add_argument("--seed", type=int, required=True)
+    ap.add_argument("--seed", type=int)
     ap.add_argument("--canary-metadata", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--hashes", help="checksum cache file (see the module docstring)")
+    ap.add_argument("--hash-only", action="store_true", help="write --hashes and exit")
     args = ap.parse_args()
 
     root = Path(args.root).resolve(strict=True)
+    tiers = [t for t in args.tiers.split(",") if t]
+    cache = load_hashes(args.hashes)
+    if args.hash_only:
+        if not args.hashes:
+            ap.error("--hash-only needs --hashes FILE")
+        return write_hashes(args.hashes, root, tiers, cache)
+    if not args.api or args.seed is None:
+        ap.error("--api and --seed are required to register")
     api = args.api.rstrip("/")
     rng = random.Random(f"{args.seed}:drs")
-    tiers = [t for t in args.tiers.split(",") if t]
     inventory, canaries = [], []
 
     for tier, path in collect(root, tiers):
         rel = path.relative_to(root).as_posix()
-        checksum = hash_file(path)
+        checksum = file_hash(path, rel, cache)
         object_id = f"sha256-{checksum}"
         stamp = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat()
         description = f"{tier} tier: {rel}"

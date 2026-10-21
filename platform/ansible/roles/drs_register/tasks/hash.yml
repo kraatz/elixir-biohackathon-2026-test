@@ -1,0 +1,26 @@
+---
+# Started right after the data is seeded: the sha256 of every file of the
+# selected tiers, computed in the background while the images build. main.yml
+# joins the job and registers from the cache instead of hashing again.
+- name: Registration helper
+  ansible.builtin.copy:
+    src: drs_register.py
+    dest: /opt/spe/bin/drs_register.py
+    mode: "0755"
+
+- name: Checksums in the background
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - /opt/spe/bin/drs_register.py
+      - --root
+      - "{{ spe_data_root }}"
+      - --tiers
+      - "{{ spe_tiers | join(',') }}"
+      - --hash-only
+      - --hashes
+      - "{{ spe_drs_hash_cache }}"
+  async: 1800
+  poll: 0
+  register: spe_hash_job
+  changed_when: false

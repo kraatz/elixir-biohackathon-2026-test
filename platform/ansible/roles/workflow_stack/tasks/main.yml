@@ -1,111 +1,13 @@
 ---
-# Clone, build and run the WESkit / drs-filer / trs-filer / Traefik stack.
-- name: Source repositories
-  ansible.builtin.git:
-    repo: "{{ item.repo }}"
-    dest: "{{ spe_stack_dir }}/{{ item.dest }}"
-    version: "{{ item.version }}"
-    force: true
-  loop:
-    - { repo: "{{ spe_weskit_repo }}", dest: weskit-src, version: "{{ spe_weskit_commit | default(spe_weskit_branch, true) }}" }
-    - { repo: "{{ spe_deployment_repo }}", dest: deployment, version: "{{ spe_deployment_commit }}" }
-    - { repo: "{{ spe_drs_filer_repo }}", dest: drs-filer, version: "{{ spe_drs_filer_commit }}" }
-    - { repo: "{{ spe_trs_filer_repo }}", dest: trs-filer, version: "{{ spe_trs_filer_commit }}" }
-  loop_control:
-    label: "{{ item.dest }}@{{ item.version }}"
-
-- name: Resolve WESkit commit
-  ansible.builtin.command: git -C {{ spe_stack_dir }}/weskit-src rev-parse --short=8 HEAD
-  changed_when: false
-  register: weskit_head
-
-- name: Image names
-  ansible.builtin.set_fact:
-    spe_weskit_commit_short: "{{ weskit_head.stdout | trim }}"
-    spe_weskit_image: "weskit-api:{{ weskit_head.stdout | trim }}"
-    spe_drs_image: "drs-filer:{{ spe_drs_filer_commit[:7] }}"
-    spe_trs_image: "trs-filer:{{ spe_trs_filer_commit[:7] }}"
-
-- name: Which images exist already
-  ansible.builtin.command: docker image inspect --format ok {{ item }}
-  loop: ["{{ spe_weskit_image }}", "{{ spe_drs_image }}", "{{ spe_trs_image }}"]
-  register: image_state
-  changed_when: false
-  failed_when: false
-
-- name: Build WESkit image (several minutes)
-  ansible.builtin.command:
-    argv:
-      - docker
-      - build
-      - --build-arg
-      - baseImage={{ spe_weskit_base_image }}
-      - -t
-      - "{{ spe_weskit_image }}"
-      - "{{ spe_stack_dir }}/weskit-src"
-  when: image_state.results[0].rc != 0
-  async: 3600
-  poll: 20
-
-- name: Build drs-filer image
-  ansible.builtin.command: docker build -t {{ spe_drs_image }} {{ spe_stack_dir }}/drs-filer
-  when: image_state.results[1].rc != 0
-  async: 1800
-  poll: 15
-
-- name: Build trs-filer image
-  ansible.builtin.command: docker build -t {{ spe_trs_image }} {{ spe_stack_dir }}/trs-filer
-  when: image_state.results[2].rc != 0
-  async: 1800
-  poll: 15
-
-- name: Config and certificate directories
+# Configure and start the WESkit / drs-filer / trs-filer / Traefik stack. The
+# sources were cloned and the image builds started by build.yml, the images
+# pulled by role prefetch and the certificate made by role tls; each is joined
+# here right before it is needed.
+- name: Configuration directory
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ spe_stack_dir }}/config/weskit_config"
     state: directory
     mode: "0755"
-  loop:
-    - "{{ spe_stack_dir }}/config/weskit_config"
-    - "{{ spe_stack_dir }}/deployment/certs"
-
-- name: TLS private key
-  community.crypto.openssl_privatekey:
-    path: "{{ spe_stack_dir }}/deployment/certs/traefik.key"
-    size: 4096
-    mode: "0600"
-
-- name: TLS certificate signing request (IP SANs, own trust anchor)
-  community.crypto.openssl_csr:
-    path: "{{ spe_stack_dir }}/deployment/certs/traefik.csr"
-    privatekey_path: "{{ spe_stack_dir }}/deployment/certs/traefik.key"
-    common_name: "{{ spe_api_host }}"
-    subject_alt_name: "{{ ['IP:' ~ spe_api_host, 'IP:127.0.0.1', 'DNS:localhost'] + (['IP:' ~ spe_floating_ip] if spe_floating_ip else []) }}"
-    basic_constraints: ["CA:TRUE"]
-    basic_constraints_critical: true
-
-- name: Self-signed TLS certificate
-  community.crypto.x509_certificate:
-    path: "{{ spe_stack_dir }}/deployment/certs/traefik.crt"
-    csr_path: "{{ spe_stack_dir }}/deployment/certs/traefik.csr"
-    privatekey_path: "{{ spe_stack_dir }}/deployment/certs/traefik.key"
-    provider: selfsigned
-    selfsigned_not_after: "+{{ spe_cert_days }}d"
-    mode: "0644"
-  register: cert
-
-- name: Trust the certificate system-wide
-  ansible.builtin.copy:
-    src: "{{ spe_stack_dir }}/deployment/certs/traefik.crt"
-    dest: /usr/local/share/ca-certificates/spe-local-ca.crt
-    remote_src: true
-    mode: "0644"
-  become: true
-  register: ca_copy
-
-- name: Update CA store
-  ansible.builtin.command: update-ca-certificates
-  become: true
-  when: ca_copy.changed
 
 - name: Unchanged config files from the deployment repository
   ansible.builtin.copy:
@@ -136,6 +38,13 @@
     chdir: "{{ spe_stack_dir }}/deployment"
   changed_when: false
 
+- name: Stack images pulled (started by role prefetch)
+  ansible.builtin.import_role:
+    name: prefetch
+    tasks_from: wait
+  vars:
+    spe_prefetch_wait: "{{ spe_stack_images }}"
+
 - name: Databases and broker up
   community.docker.docker_compose_v2:
     project_src: "{{ spe_stack_dir }}/deployment"
@@ -161,6 +70,18 @@
   delay: 2
   changed_when: false
 
+- name: Images built (started by build.yml)
+  ansible.builtin.async_status:
+    jid: "{{ item.ansible_job_id }}"
+  loop: "{{ stack_build_jobs.results }}"
+  loop_control:
+    label: "{{ item.item.image }}"
+  register: stack_builds
+  until: stack_builds.finished
+  retries: 720
+  delay: 5
+  when: item.ansible_job_id is defined
+
 - name: Initialise WESkit data volumes
   community.docker.docker_compose_v2_run:
     project_src: "{{ spe_stack_dir }}/deployment"
@@ -185,7 +106,7 @@
 - name: Wait for the three APIs
   ansible.builtin.uri:
     url: "https://{{ spe_api_host }}{{ item }}"
-    ca_path: "{{ spe_stack_dir }}/deployment/certs/traefik.crt"
+    ca_path: "{{ spe_cert_dir }}/traefik.crt"
     status_code: 200
   loop:
     - /ga4gh/wes/v1/service-info

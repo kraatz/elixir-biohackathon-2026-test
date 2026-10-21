@@ -1,7 +1,8 @@
 ---
 # The agent's sandbox: the open-terminal image with this instance's own CA,
 # the WES/DRS/TRS runbook and the system prompt. Shared by the openwebui and
-# agui frontends; runs after the workflow stack so the CA exists.
+# agui frontends. Runs right after role tls (the CA) and starts the build in
+# the background (a 5.7 GB base image); the frontend role joins it (wait.yml).
 - name: Frontend directory
   ansible.builtin.file:
     path: "{{ spe_frontend_dir }}"
@@ -25,7 +26,7 @@
 
 - name: SPE trust anchor into the build context
   ansible.builtin.copy:
-    src: "{{ spe_stack_dir }}/deployment/certs/traefik.crt"
+    src: "{{ spe_cert_dir }}/traefik.crt"
     dest: "{{ spe_frontend_dir }}/spe-ca.crt"
     remote_src: true
     owner: "{{ spe_ssh_user }}"
@@ -33,7 +34,7 @@
     mode: "0644"
   register: sandbox_ca_file
 
-- name: Build the open-terminal image with the SPE CA
+- name: Build the open-terminal image with the SPE CA, in the background
   community.docker.docker_image:
     name: "{{ spe_frontend_terminal_image }}"
     build:
@@ -42,8 +43,7 @@
       pull: false
     source: build
     force_source: "{{ sandbox_ctx_files.changed or sandbox_ca_file.changed }}"
-  register: sandbox_build
-
-- name: Sandbox image changed
-  ansible.builtin.set_fact:
-    sandbox_image_changed: "{{ sandbox_build.changed }}"
+  async: 3600
+  poll: 0
+  register: sandbox_build_job
+  changed_when: false   # the join (wait.yml) reports the change

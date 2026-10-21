@@ -1,0 +1,73 @@
+---
+# Clone the sources and start the image builds in the background. Runs before
+# the data is copied so the builds overlap the copy and the seeding; main.yml
+# joins them right before the stack needs the images.
+- name: Source repositories
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ spe_stack_dir }}/{{ item.dest }}"
+    version: "{{ item.version }}"
+    force: true
+  loop:
+    - { repo: "{{ spe_weskit_repo }}", dest: weskit-src, version: "{{ spe_weskit_commit | default(spe_weskit_branch, true) }}" }
+    - { repo: "{{ spe_deployment_repo }}", dest: deployment, version: "{{ spe_deployment_commit }}" }
+    - { repo: "{{ spe_drs_filer_repo }}", dest: drs-filer, version: "{{ spe_drs_filer_commit }}" }
+    - { repo: "{{ spe_trs_filer_repo }}", dest: trs-filer, version: "{{ spe_trs_filer_commit }}" }
+  loop_control:
+    label: "{{ item.dest }}@{{ item.version }}"
+  async: 1800
+  poll: 0
+  register: stack_clone_jobs
+  changed_when: false   # the join below reports the change
+
+- name: Repositories cloned
+  ansible.builtin.async_status:
+    jid: "{{ item.ansible_job_id }}"
+  loop: "{{ stack_clone_jobs.results }}"
+  loop_control:
+    label: "{{ item.item.dest }}"
+  register: stack_clones
+  until: stack_clones.finished
+  retries: 180
+  delay: 5
+
+- name: Resolve WESkit commit
+  ansible.builtin.command: git -C {{ spe_stack_dir }}/weskit-src rev-parse --short=8 HEAD
+  changed_when: false
+  register: weskit_head
+
+- name: Image names
+  ansible.builtin.set_fact:
+    spe_weskit_commit_short: "{{ weskit_head.stdout | trim }}"
+    spe_weskit_image: "weskit-api:{{ weskit_head.stdout | trim }}"
+    spe_drs_image: "drs-filer:{{ spe_drs_filer_commit[:7] }}"
+    spe_trs_image: "trs-filer:{{ spe_trs_filer_commit[:7] }}"
+
+- name: Which images exist already
+  ansible.builtin.command: docker image inspect --format ok {{ item }}
+  loop: ["{{ spe_weskit_image }}", "{{ spe_drs_image }}", "{{ spe_trs_image }}"]
+  register: image_state
+  changed_when: false
+  failed_when: false
+
+- name: Image builds in the background (WESkit takes several minutes)
+  ansible.builtin.command:
+    argv: "{{ ['docker', 'build'] + item.args + ['-t', item.image, item.context] }}"
+  loop:
+    - image: "{{ spe_weskit_image }}"
+      context: "{{ spe_stack_dir }}/weskit-src"
+      args: ["--build-arg", "baseImage={{ spe_weskit_base_image }}"]
+    - image: "{{ spe_drs_image }}"
+      context: "{{ spe_stack_dir }}/drs-filer"
+      args: []
+    - image: "{{ spe_trs_image }}"
+      context: "{{ spe_stack_dir }}/trs-filer"
+      args: []
+  loop_control:
+    label: "{{ item.image }}"
+    index_var: build_idx
+  when: image_state.results[build_idx].rc != 0
+  async: 3600
+  poll: 0
+  register: stack_build_jobs
+  changed_when: false   # the join (main.yml) reports the change

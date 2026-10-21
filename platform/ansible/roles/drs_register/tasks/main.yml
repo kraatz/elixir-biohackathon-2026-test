@@ -1,4 +1,14 @@
 ---
+- name: Checksums computed (started by hash.yml)
+  ansible.builtin.async_status:
+    jid: "{{ spe_hash_job.ansible_job_id }}"
+  register: spe_hashes
+  until: spe_hashes.finished
+  retries: 360
+  delay: 5
+  changed_when: false
+  when: spe_hash_job is defined
+
 - name: Registration helper
   ansible.builtin.copy:
     src: drs_register.py
@@ -10,7 +20,8 @@
     argv: >-
       {{ ['/usr/bin/python3', '/opt/spe/bin/drs_register.py',
           '--root', spe_data_root, '--api', 'https://' ~ spe_api_host ~ '/ga4gh/drs/v1',
-          '--tiers', spe_tiers | join(','), '--seed', spe_seed | string]
+          '--tiers', spe_tiers | join(','), '--seed', spe_seed | string,
+          '--hashes', spe_drs_hash_cache]
          + (['--canary-metadata'] if spe_canary_drs_metadata else []) }}
   register: drs_run
   changed_when: "'register' in drs_run.stderr"

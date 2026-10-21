@@ -2,7 +2,7 @@
 - name: APIs answer
   ansible.builtin.uri:
     url: "https://{{ spe_api_host }}{{ item }}"
-    ca_path: "{{ spe_stack_dir }}/deployment/certs/traefik.crt"
+    ca_path: "{{ spe_cert_dir }}/traefik.crt"
     status_code: 200
   loop:
     - /ga4gh/wes/v1/service-info

@@ -95,32 +95,52 @@ from; Docker is never pruned. Built images and `output/<instance>/` are kept.
    (22 from `spe_ssh_cidrs`, 443 from `spe_api_cidrs`, ICMP), server
    `<instance>-api` booted from a `spe_boot_volume_gb` volume of `spe_image`,
    floating IP from `spe_floating_network`.
-2. **base**: Docker CE, bioinformatics tools (samtools, bcftools, tabix),
-   docker daemon MTU, directories.
-3. **spe_data**: rsync of the reference tier and the selected samples from the
-   controller, then `spe_seed.py` renames samples to `<prefix>-000n`, rewrites
-   CRAM headers, regenerates the registry, plants canaries, writes the flag
-   file and provenance notes. The Manila share is never mounted.
-4. **workflow_stack**: clones the four repositories at the configured
-   revisions, builds the images (`weskit-api:<commit>`), creates a
-   self-signed certificate with the instance IPs as SANs, installs it as a
-   trust anchor, renders configs and compose file, starts the stack and waits
-   for the three APIs.
-5. **drs_register**: registers every file of the selected tiers in DRS.
-6. **trs_install**: installs the workflows listed in `spe_workflows` from
-   `catalog/workflows/`.
-7. **openwebui** (only when `spe_frontend == openwebui`): builds an
-   `open-terminal` image carrying this instance's own CA and the WES/DRS/TRS
-   bases, then runs OpenWebUI + open-terminal in a `spe-frontend` compose
-   project. OpenWebUI is bound to `127.0.0.1:8080` and
-   uses the de.NBI LLM endpoint; the operator reaches it through the Coder
-   portal or an SSH tunnel. It runs without a login (`spe_webui_auth: false`),
-   LLM tag generation is off, and the pinned note "Run report" is created
-   from `reports/run_report.md.j2`.
-   **agui** (only when `spe_frontend == agui`): the same sandbox, our own agent
-   over AG-UI and a CopilotKit chat, in the same compose project (see below).
-8. **handoff**: writes `output/<instance>/` (see below).
-9. **verify**: endpoint checks and a WES smoke run with a DRS input.
+
+On the VM the work then runs in overlapping lanes: everything slow that only
+needs Docker starts in the background (Ansible `async` jobs) as soon as Docker
+is up, the data copy and the seeding run meanwhile, and each consumer joins
+the job it needs right before it needs it (the `wait` task files).
+
+2. **base**: Docker CE, docker daemon MTU, directories. The seeding tools
+   (samtools, bcftools, tabix, age) install in the background.
+3. **coder_agent** (portal instances only): the Coder agent, first, so the
+   portal shows the workspace connected within minutes.
+4. **prefetch**: pulls the stack's images, the WESkit base image and, for the
+   `openwebui` frontend, the OpenWebUI image in the background.
+5. **tls**: self-signed certificate with the instance IPs as SANs in
+   `spe_cert_dir`, installed as a trust anchor.
+6. **sandbox** (a frontend is set): starts the build of the `open-terminal`
+   image carrying this instance's own CA and the WES/DRS/TRS runbook.
+7. **workflow_stack** (`build.yml`): clones the four repositories at the
+   configured revisions and starts the image builds (`weskit-api:<commit>`,
+   drs-filer, trs-filer).
+8. **agui** (`build.yml`, only when `spe_frontend == agui`): stages the agent
+   and chat UI sources and starts their image builds.
+9. **spe_data**: rsync of the reference tier and the selected samples from the
+   controller, then (after the seeding tools are in) `spe_seed.py` renames
+   samples to `<prefix>-000n`, rewrites CRAM headers, regenerates the registry,
+   plants canaries, writes the flag file and provenance notes. The Manila
+   share is never mounted. Afterwards **drs_register** (`hash.yml`) starts
+   hashing every data file in the background.
+10. **workflow_stack**: renders configs and compose file, joins the pulls,
+    starts the databases, joins the image builds, starts the stack and waits
+    for the three APIs.
+11. **drs_register**: registers every file of the selected tiers in DRS, with
+    the checksums computed in the background.
+12. **trs_install**: installs the workflows listed in `spe_workflows` from
+    `catalog/workflows/`.
+13. **openwebui** (only when `spe_frontend == openwebui`): joins the sandbox
+    build and the image pull, then runs OpenWebUI + open-terminal in a
+    `spe-frontend` compose project. OpenWebUI is bound to `127.0.0.1:8080` and
+    uses the de.NBI LLM endpoint; the operator reaches it through the Coder
+    portal or an SSH tunnel. It runs without a login (`spe_webui_auth: false`),
+    LLM tag generation is off, and the pinned note "Run report" is created
+    from `reports/run_report.md.j2`.
+    **agui** (only when `spe_frontend == agui`): joins the sandbox and the
+    agent and chat UI builds, then runs the same sandbox, our own agent over
+    AG-UI and a CopilotKit chat in the same compose project (see below).
+14. **handoff**: writes `output/<instance>/` (see below).
+15. **verify**: endpoint checks and a WES smoke run with a DRS input.
 
 Created through the Coder portal, the instance also gets the Coder agent
 (`coder_agent` role) so the portal can proxy the frontend.
