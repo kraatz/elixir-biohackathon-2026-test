@@ -61,6 +61,7 @@
   async: 1800
   poll: 0
   register: spe_apt_job
+  changed_when: false   # the join (wait_packages.yml) reports the change
 
 - name: Docker daemon configuration
   ansible.builtin.template:

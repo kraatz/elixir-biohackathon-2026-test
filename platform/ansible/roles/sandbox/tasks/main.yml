@@ -46,3 +46,4 @@
   async: 3600
   poll: 0
   register: sandbox_build_job
+  changed_when: false   # the join (wait.yml) reports the change

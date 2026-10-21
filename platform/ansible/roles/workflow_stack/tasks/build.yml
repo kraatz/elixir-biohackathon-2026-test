@@ -18,6 +18,7 @@
   async: 1800
   poll: 0
   register: stack_clone_jobs
+  changed_when: false   # the join below reports the change
 
 - name: Repositories cloned
   ansible.builtin.async_status:
@@ -69,3 +70,4 @@
   async: 3600
   poll: 0
   register: stack_build_jobs
+  changed_when: false   # the join (main.yml) reports the change

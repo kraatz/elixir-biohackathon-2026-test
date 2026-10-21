@@ -99,3 +99,4 @@
   async: 3600
   poll: 0
   register: agui_build_jobs
+  changed_when: false   # the join (main.yml) reports the change
