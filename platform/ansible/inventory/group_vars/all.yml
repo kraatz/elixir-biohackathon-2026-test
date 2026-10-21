@@ -69,15 +69,14 @@ spe_monitoring_concurrency: 2
 spe_cert_dir: "{{ spe_stack_dir }}/certs"   # role tls: key, CSR and self-signed certificate
 spe_cert_days: 825
 # Images the compose file pulls. Role prefetch pulls them in the background
-# right after Docker is up, together with the WESkit base image and, for the
-# openwebui frontend, the OpenWebUI image.
+# right after Docker is up, together with the OpenWebUI image for the openwebui
+# frontend; each consumer waits only for its own (spe_prefetch_wait).
 spe_mongo_image: mongo:5.0.6            # WESkit database
 spe_redis_image: redis:6.2.6-alpine     # WESkit result broker
 spe_traefik_image: traefik:v2.11
 spe_filer_mongo_image: mongo:3.6        # drs-filer and trs-filer databases
-spe_prefetch_images: >-
-  {{ [spe_mongo_image, spe_redis_image, spe_traefik_image, spe_filer_mongo_image, spe_weskit_base_image]
-     + ([spe_frontend_webui_image] if spe_frontend == 'openwebui' else []) }}
+spe_stack_images: "{{ [spe_mongo_image, spe_redis_image, spe_traefik_image, spe_filer_mongo_image] }}"
+spe_prefetch_images: "{{ spe_stack_images + ([spe_frontend_webui_image] if spe_frontend == 'openwebui' else []) }}"
 # sha256 of every data file, computed in the background after seeding and read
 # by the DRS registration (role drs_register).
 spe_drs_hash_cache: /opt/spe/drs-hashes.json

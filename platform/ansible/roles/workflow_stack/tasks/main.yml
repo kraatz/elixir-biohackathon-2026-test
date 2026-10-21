@@ -38,10 +38,12 @@
     chdir: "{{ spe_stack_dir }}/deployment"
   changed_when: false
 
-- name: Images pulled (started by role prefetch)
+- name: Stack images pulled (started by role prefetch)
   ansible.builtin.import_role:
     name: prefetch
     tasks_from: wait
+  vars:
+    spe_prefetch_wait: "{{ spe_stack_images }}"
 
 - name: Databases and broker up
   community.docker.docker_compose_v2:
