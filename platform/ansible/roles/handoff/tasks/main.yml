@@ -69,7 +69,7 @@
 
 - name: Trust anchor for clients
   ansible.builtin.fetch:
-    src: "{{ spe_stack_dir }}/deployment/certs/traefik.crt"
+    src: "{{ spe_cert_dir }}/traefik.crt"
     dest: "{{ spe_output_dir }}/ca.crt"
     flat: true
 

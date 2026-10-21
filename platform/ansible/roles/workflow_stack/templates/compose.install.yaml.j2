@@ -72,14 +72,14 @@ services:
     - traefik.http.services.weskit_rest.loadbalancer.server.port=5000
     restart: unless-stopped
   database:
-    image: mongo:5.0.6
+    image: {{ spe_mongo_image }}
     networks:
     - weskit
     restart: unless-stopped
     volumes:
     - wes-mongodb:/data/db
   result_broker:
-    image: redis:6.2.6-alpine
+    image: {{ spe_redis_image }}
     volumes:
     - ../config/weskit_config/redis.conf:/usr/local/etc/redis/redis.conf:ro
     - redis-data:/data
@@ -203,7 +203,7 @@ services:
     - weskit
     restart: unless-stopped
   traefik:
-    image: traefik:v2.11
+    image: {{ spe_traefik_image }}
     restart: unless-stopped
     ports:
     - 443:443
@@ -212,7 +212,7 @@ services:
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock:ro
     - ./tls.yaml:/configuration/tls.yaml:ro
-    - ./certs:/certs:ro
+    - {{ spe_cert_dir }}:/certs:ro
     command:
     - --providers.docker=true
     - --providers.docker.exposedbydefault=false
@@ -220,7 +220,7 @@ services:
     - --entrypoints.websecure.address=:443
     - --log.level=INFO
   drs-mongodb:
-    image: mongo:3.6
+    image: {{ spe_filer_mongo_image }}
     restart: unless-stopped
     volumes:
     - drs-mongodb:/data/db
@@ -245,7 +245,7 @@ services:
     - traefik.http.routers.drs.tls=true
     - traefik.http.services.drs.loadbalancer.server.port=8080
   trs-mongodb:
-    image: mongo:3.6
+    image: {{ spe_filer_mongo_image }}
     restart: unless-stopped
     volumes:
     - trs-mongodb:/data/db

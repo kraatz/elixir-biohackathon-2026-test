@@ -1,0 +1,15 @@
+---
+# Joins the pulls started by main.yml. Nothing to join when the role did not
+# run (e.g. --tags stack): compose then pulls what it needs itself.
+- name: Images pulled
+  ansible.builtin.async_status:
+    jid: "{{ item.ansible_job_id }}"
+  loop: "{{ spe_pull_jobs.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  register: spe_pulls
+  until: spe_pulls.finished
+  retries: 720
+  delay: 5
+  changed_when: false
+  when: spe_pull_jobs is defined

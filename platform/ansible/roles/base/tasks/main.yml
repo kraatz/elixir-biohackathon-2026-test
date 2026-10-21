@@ -46,10 +46,21 @@
 
 - name: Install packages
   ansible.builtin.apt:
-    name: [git, curl, rsync, ca-certificates, python3-yaml, python3-docker, samtools, bcftools, tabix, age]
+    name: [git, curl, rsync, ca-certificates, python3-yaml, python3-docker]
     state: present
     update_cache: true
     cache_valid_time: 3600
+
+# Only the seeding needs these, minutes from now; the install (slow on some
+# mirrors) runs in the background and spe_data joins it (wait_packages.yml).
+# No other apt task may run after this one is started.
+- name: Seeding tools, installed in the background
+  ansible.builtin.apt:
+    name: [samtools, bcftools, tabix, age]
+    state: present
+  async: 1800
+  poll: 0
+  register: spe_apt_job
 
 - name: Docker daemon configuration
   ansible.builtin.template:

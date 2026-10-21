@@ -1,0 +1,11 @@
+---
+# Pulls the images the stack and the frontend need in the background, right
+# after Docker is up, so the downloads overlap the data copy and the image
+# builds. wait.yml joins them before the first compose up.
+- name: Pull images in the background
+  ansible.builtin.command: docker pull --quiet {{ item }}
+  loop: "{{ spe_prefetch_images }}"
+  async: 3600
+  poll: 0
+  register: spe_pull_jobs
+  changed_when: false

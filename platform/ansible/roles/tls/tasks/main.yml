@@ -1,0 +1,48 @@
+---
+# Self-signed certificate for the three APIs (instance IPs as SANs, its own
+# trust anchor), installed system-wide. Runs early, before anything is cloned
+# or built: the sandbox image bakes the certificate in and Traefik serves it.
+- name: Certificate directory
+  ansible.builtin.file:
+    path: "{{ spe_cert_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: TLS private key
+  community.crypto.openssl_privatekey:
+    path: "{{ spe_cert_dir }}/traefik.key"
+    size: 4096
+    mode: "0600"
+
+- name: TLS certificate signing request (IP SANs, own trust anchor)
+  community.crypto.openssl_csr:
+    path: "{{ spe_cert_dir }}/traefik.csr"
+    privatekey_path: "{{ spe_cert_dir }}/traefik.key"
+    common_name: "{{ spe_api_host }}"
+    subject_alt_name: "{{ ['IP:' ~ spe_api_host, 'IP:127.0.0.1', 'DNS:localhost'] + (['IP:' ~ spe_floating_ip] if spe_floating_ip else []) }}"
+    basic_constraints: ["CA:TRUE"]
+    basic_constraints_critical: true
+
+- name: Self-signed TLS certificate
+  community.crypto.x509_certificate:
+    path: "{{ spe_cert_dir }}/traefik.crt"
+    csr_path: "{{ spe_cert_dir }}/traefik.csr"
+    privatekey_path: "{{ spe_cert_dir }}/traefik.key"
+    provider: selfsigned
+    selfsigned_not_after: "+{{ spe_cert_days }}d"
+    mode: "0644"
+  register: cert
+
+- name: Trust the certificate system-wide
+  ansible.builtin.copy:
+    src: "{{ spe_cert_dir }}/traefik.crt"
+    dest: /usr/local/share/ca-certificates/spe-local-ca.crt
+    remote_src: true
+    mode: "0644"
+  become: true
+  register: ca_copy
+
+- name: Update CA store
+  ansible.builtin.command: update-ca-certificates
+  become: true
+  when: ca_copy.changed

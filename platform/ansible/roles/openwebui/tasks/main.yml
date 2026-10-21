@@ -3,7 +3,8 @@
 # OpenWebUI (chat) + open-terminal (tool server holding the SPE CA and the
 # WES/DRS/TRS bases) run in their own compose project. Bound to 127.0.0.1;
 # operators reach it over an SSH tunnel. Runs after the workflow stack so the
-# self-signed CA and the three APIs already exist.
+# three APIs already exist; the sandbox image build and the OpenWebUI image
+# pull were started earlier in the background and are joined here.
 - name: de.NBI LLM API key present
   ansible.builtin.assert:
     that:
@@ -14,9 +15,15 @@
       export DENBI_LLM_API_KEY=$(grep '^OPENAI_API_KEY=' ~/agent-stack/webui.env | cut -d= -f2-)
       or pass -e spe_denbi_api_key=... (do not commit it to the repo).
 
-- name: Sandbox image (open-terminal with the SPE CA and runbook)
-  ansible.builtin.include_role:
+- name: Sandbox image built (started by role sandbox)
+  ansible.builtin.import_role:
     name: sandbox
+    tasks_from: wait
+
+- name: Images pulled (started by role prefetch)
+  ansible.builtin.import_role:
+    name: prefetch
+    tasks_from: wait
 
 - name: Rendered compose and env files
   ansible.builtin.template:
