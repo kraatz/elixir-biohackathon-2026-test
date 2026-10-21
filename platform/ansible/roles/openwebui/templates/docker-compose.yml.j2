@@ -11,6 +11,10 @@ services:
     env_file: webui.env
     environment:
       ENABLE_OLLAMA_API: "false"
+      # Preselected model for new chats (the one carrying the system prompt,
+      # see tasks/main.yml) and first in the model picker.
+      DEFAULT_MODELS: "{{ spe_webui_model_id }}"
+      MODEL_ORDER_LIST: '["{{ spe_webui_model_id }}"]'
       WEBUI_AUTH: "{{ 'true' if spe_webui_auth else 'false' }}"
       ENABLE_SIGNUP: "{{ 'true' if spe_webui_auth else 'false' }}"
       DEFAULT_USER_ROLE: pending
