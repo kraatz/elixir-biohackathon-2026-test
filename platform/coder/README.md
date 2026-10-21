@@ -80,8 +80,9 @@ note title "Run report" (`spe_report_title`), the archive looks for it.
 
 1. Log in at `https://sperange.<zone>`.
 2. **Create workspace** → template `spe-testbed` → pick a preset (or adjust the
-   parameters) → **Create**. Building takes about 10–12 minutes; the build log
-   is shown live.
+   parameters) → **Create**. Building takes about 7 minutes for the baseline
+   preset (the slow downloads, builds and the data copy overlap); the build
+   log is shown live.
 3. Click **OpenWebUI** (or **Chat (AG-UI)** for the `agui` frontend). You are
    logged in directly; the agent has a terminal inside the instance.
 4. Document as you go (Open WebUI only; the AG-UI chat has no notes or tags yet):
@@ -324,7 +325,7 @@ servers, security groups and keypairs named `cw-*` and remove them with
   instance; only parameters and the canary record are saved. The run report
   note and chat tags exist in Open WebUI only.
 - **Stop = destroy.** A stopped workspace keeps nothing but its parameters;
-  start rebuilds from scratch (~11 min). Chats survive only in the archive.
+  start rebuilds from scratch (~7 min). Chats survive only in the archive.
 - **One run directory per stop.** Starting and stopping the same workspace
   twice gives two run directories.
 - **Tags are free text.** OpenWebUI does not enforce the vocabulary; LLM tag
